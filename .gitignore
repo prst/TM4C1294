@@ -1,0 +1,6 @@
+Debug/*
+Docs/*
+tmp/*
+*.exe
+*.pdf
+
