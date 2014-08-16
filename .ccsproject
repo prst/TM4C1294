@@ -7,5 +7,5 @@
 	<codegenToolVersion value="5.0.4"/>
 	<isElfFormat value="true"/>
 	<rts value="libc.a"/>
-	<isTargetManual value="false"/>
+	<isTargetManual value="true"/>
 </projectOptions>

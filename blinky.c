@@ -67,8 +67,8 @@ typedef struct {
 //******************************************************************************
 
 t_Scheduler timer_leds5x8;
-t_Scheduler timer_leds1;
-t_Scheduler timer_leds2;
+t_Scheduler timer_leds1on;
+t_Scheduler timer_leds2off;
 
 uint32_t  dly1 = 0;
 uint32_t  dly2 = 0;
@@ -276,22 +276,22 @@ void drv_led_7segments_symbol ( char symbol ) {
 int drv_led_blink (void) {
     volatile uint32_t ui32Loop;
 
-    if (timer_leds1.ready_to_use) {
-    	timer_leds2.ready_to_use=0;
-        if ((timer_leds1.timer_is_set) && (++timer_leds1.current==timer_leds1.delay_limit)) {
-    		timer_leds1.current=0;
-        	timer_leds2.ready_to_use=1;
+    if (timer_leds1on.ready_to_use) {
+    	timer_leds2off.ready_to_use=0;
+        if ((timer_leds1on.timer_is_set) && (++timer_leds1on.current==timer_leds1on.delay_limit)) {
+    		timer_leds1on.current=0;
+        	timer_leds2off.ready_to_use=1;
 
     		GPIO_PORTN_DATA_R |= 0x01;    // Turn on the LED.
     		//for (ui32Loop = 0; ui32Loop < 200000; ui32Loop++) {}    // Delay for a bit.
     	}
     }
 
-    if (timer_leds2.ready_to_use) {
-    	timer_leds1.ready_to_use=0;
-    	if ((timer_leds2.timer_is_set) && (++timer_leds2.current==timer_leds2.delay_limit)) {
-		timer_leds2.current=0;
-    	timer_leds1.ready_to_use=1;
+    if (timer_leds2off.ready_to_use) {
+    	timer_leds1on.ready_to_use=0;
+    	if ((timer_leds2off.timer_is_set) && (++timer_leds2off.current==timer_leds2off.delay_limit)) {
+		timer_leds2off.current=0;
+    	timer_leds1on.ready_to_use=1;
 
 		GPIO_PORTN_DATA_R &= ~(0x01);    // Turn off the LED.
 		//for (ui32Loop = 0; ui32Loop < 200000; ui32Loop++) {}    // Delay for a bit.
@@ -299,6 +299,22 @@ int drv_led_blink (void) {
 	}
 }
 
+//******************************************************************************
+
+
+//******************************************************************************
+void drv_init_timer_and_scheduler (void) {
+    timer_leds1on.timer_is_set = 1;
+    timer_leds1on.delay_limit  = 200000; // set period for led as time OFF
+    timer_leds1on.ready_to_use = 1;
+
+    timer_leds2off.timer_is_set = 1;
+    timer_leds2off.delay_limit  = 1000;   // set period for led as time ON
+    timer_leds2off.ready_to_use = 1;
+
+    timer_leds5x8.timer_is_set = 1;
+    timer_leds5x8.delay_limit  = 100; // set period for 5x8 7-segment display
+}
 //******************************************************************************
 
 
@@ -329,20 +345,11 @@ t_timer_stat delay_timer_leds5x8 (uint8_t cfg) {
 //******************************************************************************
 int main (void) {
     volatile uint32_t nn;
-    t_timer_stat  t_stat;
+    //t_timer_stat  t_stat;
 
+    drv_init_timer_and_scheduler ();
     drv_init_gpio ();
     drv_led_7segments_init ();
-
-    timer_leds1.timer_is_set = 1;
-    timer_leds1.delay_limit  = 200000; // set period for led as time OFF
-    timer_leds1.ready_to_use = 1;
-    timer_leds2.timer_is_set = 1;
-    timer_leds2.delay_limit  = 1000;   // set period for led as time ON
-    timer_leds2.ready_to_use = 1;
-
-    timer_leds5x8.timer_is_set = 1;
-    timer_leds5x8.delay_limit  = 100; // set period for 5x8 7-segment display
 
     // Loop forever.
     while(1) {
