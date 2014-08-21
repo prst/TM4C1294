@@ -6,8 +6,21 @@
 //
 //*****************************************************************************
 
+#include <stdlib.h>
 #include <stdint.h>
 #include "inc/tm4c1294ncpdt.h"
+
+#include <stdbool.h>
+#include <stdint.h>
+#include "inc/hw_memmap.h"
+#include "driverlib/gpio.h"
+#include "driverlib/pin_map.h"
+#include "driverlib/pwm.h"
+#include "driverlib/sysctl.h"
+#include "driverlib/uart.h"
+#include "utils/uartstdio.h"
+
+//typedef  enum { FALSE, TRUE } bool;
 
 
 
@@ -45,15 +58,15 @@
 // TYPES
 //******************************************************************************
 typedef enum {
-	_TIMER_OK     = 0,
-	_TIMER_NOT_OK = 1
+	_TIMER_READY     = 0,
+	_TIMER_NOT_READY = 1
 } t_timer_stat;
 
 typedef struct {
 	uint8_t    ready_to_use   :1;
 	uint8_t    timer_is_set   :1;
-	uint32_t   delay_limit;
-	uint32_t   current;
+	uint32_t   set_timer_limit;
+	uint32_t   cur_timer_val;
 	uint32_t  *common_rule;
 } t_Scheduler;
 //******************************************************************************
@@ -83,7 +96,7 @@ uint32_t    leds_position = 1;
 // void drv_init_gpio ( void )
 // Initialisation for GPIO, basic configuration and default startup settings.
 //******************************************************************************
-void drv_init_gpio ( void ) {
+void drv_sys_init_gpio ( void ) {
     volatile uint32_t ui32Loop;
 
     // Enable the GPIO port that is used for the on-board LED.
@@ -125,6 +138,7 @@ void drv_init_gpio ( void ) {
     // enable the GPIO pin for digital function.
     GPIO_PORTF_AHB_DIR_R |= 0x01;
     GPIO_PORTF_AHB_DEN_R |= 0x01;
+    //GPIO_PORTF_AHB_PCTL_R;
 }
 //******************************************************************************
 
@@ -135,7 +149,7 @@ void drv_init_gpio ( void ) {
 // Initialisation for leds on board, basic configuration and default startup
 // settings.
 //******************************************************************************
-void drv_led_7segments_init ( void ) {
+void drv_usr_init_led_7segments ( void ) {
     // Initial 7-segments
     GPIO_PORTA_AHB_DIR_R = 0xFF;  GPIO_PORTA_AHB_DEN_R = 0xFF;
     GPIO_PORTA_AHB_PP_R    = 1;
@@ -214,7 +228,7 @@ void drv_led_7segments_position (unsigned char pos) {
 
 
 //******************************************************************************
-void drv_led_7segments_symbol ( char symbol ) {
+void drv_led_7segments_symbol ( unsigned char symbol ) {
     // Data to 7-segments
 	GPIO_PORTK_DATA_R     |=  (1<<2); // Cathod - A
 	GPIO_PORTA_AHB_DATA_R |=  (1<<4); // Cathod - B
@@ -225,8 +239,22 @@ void drv_led_7segments_symbol ( char symbol ) {
 	GPIO_PORTA_AHB_DATA_R |=  (1<<5); // Cathod - G
 	GPIO_PORTK_DATA_R     |=  (1<<0); // Cathod - H
 
+	if ( symbol==0x0D ) symbol = '-';
+
 	switch ( symbol ) {
+		case '-':
+			//GPIO_PORTK_DATA_R     |=  (1<<2); // Cathod - A
+			//GPIO_PORTA_AHB_DATA_R |=  (1<<4); // Cathod - B
+			//GPIO_PORTK_DATA_R     |=  (1<<1); // Cathod - C
+			//GPIO_PORTB_AHB_DATA_R |=  (1<<5); // Cathod - D
+			//GPIO_PORTB_AHB_DATA_R |=  (1<<4); // Cathod - E
+			//GPIO_PORTK_DATA_R     |=  (1<<3); // Cathod - F
+			GPIO_PORTA_AHB_DATA_R &= ~(1<<5); // Cathod - G
+			//GPIO_PORTK_DATA_R     |=  (1<<0); // Cathod - H
+		break;
+
 		case 0:
+		case '0':
 			GPIO_PORTK_DATA_R     &= ~(1<<2); // Cathod - A
 			GPIO_PORTA_AHB_DATA_R &= ~(1<<4); // Cathod - B
 			GPIO_PORTK_DATA_R     &= ~(1<<1); // Cathod - C
@@ -238,6 +266,7 @@ void drv_led_7segments_symbol ( char symbol ) {
 		break;
 
 		case 1:
+		case '1':
 			//GPIO_PORTK_DATA_R     |=  (1<<2); // Cathod - A
 			GPIO_PORTA_AHB_DATA_R &= ~(1<<4); // Cathod - B
 			GPIO_PORTK_DATA_R     &= ~(1<<1); // Cathod - C
@@ -249,6 +278,7 @@ void drv_led_7segments_symbol ( char symbol ) {
 		break;
 
 		case 2:
+		case '2':
 			GPIO_PORTK_DATA_R     &= ~(1<<2); // Cathod - A
 			GPIO_PORTA_AHB_DATA_R &= ~(1<<4); // Cathod - B
 			//GPIO_PORTK_DATA_R     |=  (1<<1); // Cathod - C
@@ -260,6 +290,7 @@ void drv_led_7segments_symbol ( char symbol ) {
 		break;
 
 		case 3:
+		case '3':
 			GPIO_PORTK_DATA_R     &= ~(1<<2); // Cathod - A
 			GPIO_PORTA_AHB_DATA_R &= ~(1<<4); // Cathod - B
 			GPIO_PORTK_DATA_R     &= ~(1<<1); // Cathod - C
@@ -271,6 +302,7 @@ void drv_led_7segments_symbol ( char symbol ) {
 		break;
 
 		case 4:
+		case '4':
 			//GPIO_PORTK_DATA_R     |=  (1<<2); // Cathod - A
 			GPIO_PORTA_AHB_DATA_R &= ~(1<<4); // Cathod - B
 			GPIO_PORTK_DATA_R     &= ~(1<<1); // Cathod - C
@@ -282,6 +314,7 @@ void drv_led_7segments_symbol ( char symbol ) {
 		break;
 
 		case 5:
+		case '5':
 			GPIO_PORTK_DATA_R     &= ~(1<<2); // Cathod - A
 			//GPIO_PORTA_AHB_DATA_R |=  (1<<4); // Cathod - B
 			GPIO_PORTK_DATA_R     &= ~(1<<1); // Cathod - C
@@ -293,6 +326,7 @@ void drv_led_7segments_symbol ( char symbol ) {
 		break;
 
 		case 6:
+		case '6':
 			GPIO_PORTK_DATA_R     &= ~(1<<2); // Cathod - A
 			//GPIO_PORTA_AHB_DATA_R |=  (1<<4); // Cathod - B
 			GPIO_PORTK_DATA_R     &= ~(1<<1); // Cathod - C
@@ -304,6 +338,7 @@ void drv_led_7segments_symbol ( char symbol ) {
 		break;
 
 		case 7:
+		case '7':
 			GPIO_PORTK_DATA_R     &= ~(1<<2); // Cathod - A
 			GPIO_PORTA_AHB_DATA_R &= ~(1<<4); // Cathod - B
 			GPIO_PORTK_DATA_R     &= ~(1<<1); // Cathod - C
@@ -315,6 +350,7 @@ void drv_led_7segments_symbol ( char symbol ) {
 		break;
 
 		case 8:
+		case '8':
 			GPIO_PORTK_DATA_R     &= ~(1<<2); // Cathod - A
 			GPIO_PORTA_AHB_DATA_R &= ~(1<<4); // Cathod - B
 			GPIO_PORTK_DATA_R     &= ~(1<<1); // Cathod - C
@@ -326,6 +362,7 @@ void drv_led_7segments_symbol ( char symbol ) {
 		break;
 
 		case 9:
+		case '9':
 			GPIO_PORTK_DATA_R     &= ~(1<<2); // Cathod - A
 			GPIO_PORTA_AHB_DATA_R &= ~(1<<4); // Cathod - B
 			GPIO_PORTK_DATA_R     &= ~(1<<1); // Cathod - C
@@ -336,6 +373,21 @@ void drv_led_7segments_symbol ( char symbol ) {
 			//GPIO_PORTK_DATA_R     |=  (1<<0); // Cathod - H
 		break;
 	}
+
+	if ( symbol==0x00 ){
+		//symbol = '.';
+		//case '.':
+			//GPIO_PORTK_DATA_R     |=  (1<<2); // Cathod - A
+			//GPIO_PORTA_AHB_DATA_R |=  (1<<4); // Cathod - B
+			//GPIO_PORTK_DATA_R     |=  (1<<1); // Cathod - C
+			//GPIO_PORTB_AHB_DATA_R |=  (1<<5); // Cathod - D
+			//GPIO_PORTB_AHB_DATA_R |=  (1<<4); // Cathod - E
+			//GPIO_PORTK_DATA_R     |=  (1<<3); // Cathod - F
+			//GPIO_PORTA_AHB_DATA_R |=  (1<<5); // Cathod - G
+			GPIO_PORTK_DATA_R     &= ~(1<<0); // Cathod - H
+		//break;
+	}
+
 }
 //******************************************************************************
 
@@ -347,19 +399,19 @@ void drv_led_7segments_symbol ( char symbol ) {
 int drv_led_blink (void) {
     volatile uint32_t ui32Loop;
     //.........................................................................
-    if (*(uint32_t *)timer_leds4on.common_rule==(uint32_t *)1){
+    if (*timer_leds4on.common_rule==1){
         if (timer_leds1on.ready_to_use) {
         	timer_leds1off.ready_to_use=0;
-            if ((timer_leds1on.timer_is_set) && (++timer_leds1on.current==timer_leds1on.delay_limit)) {
-        		timer_leds1on.current=0;
+            if ((timer_leds1on.timer_is_set) && (++timer_leds1on.cur_timer_val==timer_leds1on.set_timer_limit)) {
+        		timer_leds1on.cur_timer_val=0;
             	timer_leds1off.ready_to_use=1;
         		GPIO_PORTN_DATA_R |= 0x02;    // Turn on the LED.
         	}
         }
         if (timer_leds1off.ready_to_use) {
         	timer_leds1on.ready_to_use=0;
-        	if ((timer_leds1off.timer_is_set) && (++timer_leds1off.current==timer_leds1off.delay_limit)) {
-    			timer_leds1off.current=0;
+        	if ((timer_leds1off.timer_is_set) && (++timer_leds1off.cur_timer_val==timer_leds1off.set_timer_limit)) {
+    			timer_leds1off.cur_timer_val=0;
     			timer_leds1on.ready_to_use=1;
     			GPIO_PORTN_DATA_R &= ~(0x02);    // Turn off the LED.
     			leds_position=2;
@@ -367,19 +419,19 @@ int drv_led_blink (void) {
     	}
     }
     //.........................................................................
-    if (*(uint32_t *)timer_leds1on.common_rule==(uint32_t *)2){
+    if (*timer_leds1on.common_rule==2){
         if (timer_leds2on.ready_to_use) {
         	timer_leds2off.ready_to_use=0;
-            if ((timer_leds2on.timer_is_set) && (++timer_leds2on.current==timer_leds2on.delay_limit)) {
-        		timer_leds2on.current=0;
+            if ((timer_leds2on.timer_is_set) && (++timer_leds2on.cur_timer_val==timer_leds2on.set_timer_limit)) {
+        		timer_leds2on.cur_timer_val=0;
             	timer_leds2off.ready_to_use=1;
         		GPIO_PORTN_DATA_R |= 0x01;    // Turn on the LED.
         	}
         }
         if (timer_leds2off.ready_to_use) {
         	timer_leds2on.ready_to_use=0;
-        	if ((timer_leds2off.timer_is_set) && (++timer_leds2off.current==timer_leds2off.delay_limit)) {
-    			timer_leds2off.current=0;
+        	if ((timer_leds2off.timer_is_set) && (++timer_leds2off.cur_timer_val==timer_leds2off.set_timer_limit)) {
+    			timer_leds2off.cur_timer_val=0;
     			timer_leds2on.ready_to_use=1;
     			GPIO_PORTN_DATA_R &= ~(0x01);    // Turn off the LED.
     			leds_position=3;
@@ -387,19 +439,19 @@ int drv_led_blink (void) {
     	}
     }
     //.........................................................................
-    if (*(uint32_t *)timer_leds2on.common_rule==(uint32_t *)3){
+    if (*timer_leds2on.common_rule==3){
         if (timer_leds3on.ready_to_use) {
         	timer_leds3off.ready_to_use=0;
-            if ((timer_leds3on.timer_is_set) && (++timer_leds3on.current==timer_leds3on.delay_limit)) {
-        		timer_leds3on.current=0;
+            if ((timer_leds3on.timer_is_set) && (++timer_leds3on.cur_timer_val==timer_leds3on.set_timer_limit)) {
+        		timer_leds3on.cur_timer_val=0;
             	timer_leds3off.ready_to_use=1;
             	GPIO_PORTF_AHB_DATA_R |= 0x10;    // Turn on the LED.
         	}
         }
         if (timer_leds3off.ready_to_use) {
         	timer_leds3on.ready_to_use=0;
-        	if ((timer_leds3off.timer_is_set) && (++timer_leds3off.current==timer_leds3off.delay_limit)) {
-    			timer_leds3off.current=0;
+        	if ((timer_leds3off.timer_is_set) && (++timer_leds3off.cur_timer_val==timer_leds3off.set_timer_limit)) {
+    			timer_leds3off.cur_timer_val=0;
     			timer_leds3on.ready_to_use=1;
     			GPIO_PORTF_AHB_DATA_R &= ~(0x10);    // Turn off the LED.
     			leds_position=4;
@@ -407,19 +459,19 @@ int drv_led_blink (void) {
     	}
     }
     //.........................................................................
-    if (*(uint32_t *)timer_leds3on.common_rule==(uint32_t *)4){
+    if (*timer_leds3on.common_rule==4){
         if (timer_leds4on.ready_to_use) {
         	timer_leds4off.ready_to_use=0;
-            if ((timer_leds4on.timer_is_set) && (++timer_leds4on.current==timer_leds4on.delay_limit)) {
-        		timer_leds4on.current=0;
+            if ((timer_leds4on.timer_is_set) && (++timer_leds4on.cur_timer_val==timer_leds4on.set_timer_limit)) {
+        		timer_leds4on.cur_timer_val=0;
             	timer_leds4off.ready_to_use=1;
             	GPIO_PORTF_AHB_DATA_R |= 0x01;    // Turn on the LED.
         	}
         }
         if (timer_leds4off.ready_to_use) {
         	timer_leds4on.ready_to_use=0;
-        	if ((timer_leds4off.timer_is_set) && (++timer_leds4off.current==timer_leds4off.delay_limit)) {
-    			timer_leds4off.current=0;
+        	if ((timer_leds4off.timer_is_set) && (++timer_leds4off.cur_timer_val==timer_leds4off.set_timer_limit)) {
+    			timer_leds4off.cur_timer_val=0;
     			timer_leds4on.ready_to_use=1;
     			GPIO_PORTF_AHB_DATA_R &= ~(0x01);    // Turn off the LED.
     			leds_position=1;
@@ -435,45 +487,45 @@ int drv_led_blink (void) {
 
 
 //******************************************************************************
-void drv_init_timer_and_scheduler (void) {
+void drv_usr_init_timer_and_scheduler (void) {
     timer_leds1on.timer_is_set = 1;
-    timer_leds1on.delay_limit  = 50000; // set period for led as time OFF
+    timer_leds1on.set_timer_limit  = 50000; // set period for led as time OFF
     timer_leds1on.ready_to_use = 1;
     timer_leds1on.common_rule = &leds_position;
     timer_leds1off.timer_is_set = 1;
-    timer_leds1off.delay_limit  = 10000;   // set period for led as time ON
+    timer_leds1off.set_timer_limit  = 10000;   // set period for led as time ON
     timer_leds1off.ready_to_use = 1;
     timer_leds1off.common_rule = &leds_position;
 
     timer_leds2on.timer_is_set = 1;
-    timer_leds2on.delay_limit  = 50000; // set period for led as time OFF
+    timer_leds2on.set_timer_limit  = 50000; // set period for led as time OFF
     timer_leds2on.ready_to_use = 1;
     timer_leds2on.common_rule = &leds_position;
     timer_leds2off.timer_is_set = 1;
-    timer_leds2off.delay_limit  = 10000;   // set period for led as time ON
+    timer_leds2off.set_timer_limit  = 10000;   // set period for led as time ON
     timer_leds2off.ready_to_use = 1;
     timer_leds2off.common_rule = &leds_position;
 
     timer_leds3on.timer_is_set = 1;
-    timer_leds3on.delay_limit  = 50000; // set period for led as time OFF
+    timer_leds3on.set_timer_limit  = 50000; // set period for led as time OFF
     timer_leds3on.ready_to_use = 1;
     timer_leds3on.common_rule = &leds_position;
     timer_leds3off.timer_is_set = 1;
-    timer_leds3off.delay_limit  = 10000;   // set period for led as time ON
+    timer_leds3off.set_timer_limit  = 10000;   // set period for led as time ON
     timer_leds3off.ready_to_use = 1;
     timer_leds3off.common_rule = &leds_position;
 
     timer_leds4on.timer_is_set = 1;
-    timer_leds4on.delay_limit  = 50000; // set period for led as time OFF
+    timer_leds4on.set_timer_limit  = 50000; // set period for led as time OFF
     timer_leds4on.ready_to_use = 1;
     timer_leds4on.common_rule = &leds_position;
     timer_leds4off.timer_is_set = 1;
-    timer_leds4off.delay_limit  = 10000;   // set period for led as time ON
+    timer_leds4off.set_timer_limit  = 10000;   // set period for led as time ON
     timer_leds4off.ready_to_use = 1;
     timer_leds4off.common_rule = &leds_position;
 
     timer_leds5x8.timer_is_set = 1;
-    timer_leds5x8.delay_limit  = 200; // set period for 5x8 7-segment display
+    timer_leds5x8.set_timer_limit  = 200; // set period for 5x8 7-segment display
 }
 //******************************************************************************
 
@@ -481,48 +533,140 @@ void drv_init_timer_and_scheduler (void) {
 
 //******************************************************************************
 t_timer_stat delay_timer_leds5x8 (uint8_t cfg) {
-uint8_t  rc;
+t_timer_stat err_code = _TIMER_NOT_READY;
 
 	if (cfg==0) {
-		timer_leds5x8.current=0;
+		timer_leds5x8.cur_timer_val=0;
 	}
 
 	if (cfg=='?') {
 		if ( timer_leds5x8.timer_is_set ) {
-			if ( ++timer_leds5x8.current >= timer_leds5x8.delay_limit ) {
-				rc = _TIMER_OK;
+			if ( ++timer_leds5x8.cur_timer_val >= timer_leds5x8.set_timer_limit ) {
+				err_code = _TIMER_READY;
 			} else {
-				rc = _TIMER_NOT_OK;
+				err_code = _TIMER_NOT_READY;
 			}
 		} else {
-			rc = _TIMER_NOT_OK;
+			err_code = _TIMER_NOT_READY;
 		}
 	}
-	return rc;
+
+	return err_code;
 }
 //******************************************************************************
 
 
 
 //******************************************************************************
+// Number in to string converter
+//******************************************************************************
+// itoa
+char* IntToStr(int i, char b[]) {
+    char const digit[] = "0123456789";
+    char* p = b;
+    if(i<0){
+        *p++ = '-';
+        i *= -1;
+    }
+    int shifter = i;
+    do{ //Move to where representation ends
+        ++p;
+        shifter = shifter/10;
+    }while(shifter);
+    *p = '\0';
+    do{ //Move back, inserting digits as u go
+        *--p = digit[i%10];
+        i = i/10;
+    }while(i);
+    return b;
+}
+//******************************************************************************
+
+
+
+//******************************************************************************
+// Number in to string converter
+//******************************************************************************
+// itoa
+char* FloatToStr(float ff, char b[]) {
+    char const digit[] = "0123456789";
+    char *p = b;
+    int shifter, i;
+    float ostatok;
+
+    ostatok = ff-(int)ff;
+    if (ostatok<0) ostatok*=-1;
+    if (ostatok<0.0001) ostatok*=10000000;
+    if (ostatok<0.001) ostatok*=1000000;
+    if (ostatok<0.01) ostatok*=100000;
+    if (ostatok<0.1) ostatok*=10000;
+    if (ostatok<1) ostatok*=1000;
+
+    i = ff;
+
+    if (i<0) {
+        *p++ = '-';
+        i *= -1;
+    }
+
+    shifter = i;
+
+    do { //Move to where representation ends
+        ++p;
+        shifter = shifter/10;
+        *p = shifter;
+    } while (shifter) ;
+
+    //*p = '\0';
+    *p = '.';
+
+    do { //Move to where representation ends
+        ++p;
+        ostatok = ostatok/10;
+        *p = ostatok;
+    } while ((int)ostatok) ;
+
+    do{ //Move back, inserting digits as u go
+        *--p = digit[i%10];
+        i = i/10;
+    }while(i);
+
+    return b;
+}
+//******************************************************************************
+
+
+char data[5]={'1','3','5','7','9'};
+
+//******************************************************************************
 // Blinks on the leds and indicator.
 //******************************************************************************
 int main (void) {
     volatile uint32_t nn;
-    //t_timer_stat  t_stat;
-    uint8_t data[5]={'1','3','5','7','9'};
+    volatile uint32_t cnt=0;
+    char *tmp;
+    float in=-47.531;
 
-    drv_init_timer_and_scheduler ();
-    drv_init_gpio ();
-    drv_led_7segments_init ();
+    //SysCtlClockSet(SYSCTL_SYSDIV_1|SYSCTL_USE_OSC|SYSCTL_OSC_MAIN|SYSCTL_XTAL_16MHZ);
+    //SysCtlPWMClockSet(SYSCTL_PWMDIV_1); //Set the PWM clock to the system clock.
 
-    // Loop forever.
-    while(1) {
-		if (  _TIMER_OK == delay_timer_leds5x8('?') ) {
+    drv_sys_init_gpio ();
+    drv_usr_init_led_7segments ();
+    drv_usr_init_timer_and_scheduler ();
+
+	double num=34267;
+	char   output[10];
+	//snprintf(output,10,"%f",num);
+
+	while(1) {  // Loop forever.
+		if (  _TIMER_READY == delay_timer_leds5x8('?') ) {
 			if ( nn < 5 ) {
+				//tmp = ltoa(in, (char *)data); // ltoa - max string 34 bytes.
+				//tmp = FloatToStr(in, data); // ltoa - max string 34 bytes.
 				drv_led_7segments_position ( nn ); // dinamic switching
-				drv_led_7segments_symbol   ( data[nn]&0x0F ); // display info
+				drv_led_7segments_symbol   ( data/*output*/[nn]/*&0x0F*/ ); // display info
 				nn++;
+				cnt++;
     		} else {
 				nn = 0;
     		}
