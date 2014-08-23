@@ -81,6 +81,7 @@ t_Scheduler timer_leds1on, timer_leds1off;
 t_Scheduler timer_leds2on, timer_leds2off;
 t_Scheduler timer_leds3on, timer_leds3off;
 t_Scheduler timer_leds4on, timer_leds4off;
+t_Scheduler timer_count;
 
 uint32_t  dly1 = 0;
 uint32_t  dly2 = 0;
@@ -88,6 +89,24 @@ uint32_t  dly3 = 0;
 uint32_t  dly4 = 0;
 
 uint32_t    leds_position = 1;
+//******************************************************************************
+
+
+
+
+//******************************************************************************
+void drv_sys_init_gpio ( void );
+void drv_usr_init_led_7segments ( void );
+void drv_led_7segments_position (unsigned char pos);
+void drv_led_7segments_symbol ( uint8_t position, uint8_t symbol, uint8_t comma );
+int drv_led_blink (void);
+void drv_usr_init_scheduler_and_all_timers (void);
+t_timer_stat delay_timer_count (uint8_t cfg);
+t_timer_stat delay_timer_leds5x8 (uint8_t cfg);
+char* IntToStr(int i, char b[]);
+char* FloatToLeds5x8(float ff, char b[]);
+char *ultostr(unsigned long value, char *ptr, int base);
+char *ftostr(float value, char *ptr, int base, uint8_t *comma);
 //******************************************************************************
 
 
@@ -228,7 +247,7 @@ void drv_led_7segments_position (unsigned char pos) {
 
 
 //******************************************************************************
-void drv_led_7segments_symbol ( unsigned char symbol ) {
+void drv_led_7segments_symbol ( uint8_t position, uint8_t symbol, uint8_t comma ) {
     // Data to 7-segments
 	GPIO_PORTK_DATA_R     |=  (1<<2); // Cathod - A
 	GPIO_PORTA_AHB_DATA_R |=  (1<<4); // Cathod - B
@@ -374,7 +393,7 @@ void drv_led_7segments_symbol ( unsigned char symbol ) {
 		break;
 	}
 
-	if ( symbol==0x00 ){
+	if ( symbol==0x00 ) {
 		//symbol = '.';
 		//case '.':
 			//GPIO_PORTK_DATA_R     |=  (1<<2); // Cathod - A
@@ -388,6 +407,13 @@ void drv_led_7segments_symbol ( unsigned char symbol ) {
 		//break;
 	}
 
+	if (position==comma) { // Cathod - H
+		GPIO_PORTK_DATA_R&=~(1<<0);
+	}
+
+	if (position==(0x30+comma)) { // Cathod - H
+		GPIO_PORTK_DATA_R&=~(1<<0);
+	}
 }
 //******************************************************************************
 
@@ -487,13 +513,13 @@ int drv_led_blink (void) {
 
 
 //******************************************************************************
-void drv_usr_init_timer_and_scheduler (void) {
+void drv_usr_init_scheduler_and_all_timers (void) {
     timer_leds1on.timer_is_set = 1;
     timer_leds1on.set_timer_limit  = 50000; // set period for led as time OFF
     timer_leds1on.ready_to_use = 1;
     timer_leds1on.common_rule = &leds_position;
     timer_leds1off.timer_is_set = 1;
-    timer_leds1off.set_timer_limit  = 10000;   // set period for led as time ON
+    timer_leds1off.set_timer_limit  = 1000;   // set period for led as time ON
     timer_leds1off.ready_to_use = 1;
     timer_leds1off.common_rule = &leds_position;
 
@@ -502,7 +528,7 @@ void drv_usr_init_timer_and_scheduler (void) {
     timer_leds2on.ready_to_use = 1;
     timer_leds2on.common_rule = &leds_position;
     timer_leds2off.timer_is_set = 1;
-    timer_leds2off.set_timer_limit  = 10000;   // set period for led as time ON
+    timer_leds2off.set_timer_limit  = 1000;   // set period for led as time ON
     timer_leds2off.ready_to_use = 1;
     timer_leds2off.common_rule = &leds_position;
 
@@ -511,7 +537,7 @@ void drv_usr_init_timer_and_scheduler (void) {
     timer_leds3on.ready_to_use = 1;
     timer_leds3on.common_rule = &leds_position;
     timer_leds3off.timer_is_set = 1;
-    timer_leds3off.set_timer_limit  = 10000;   // set period for led as time ON
+    timer_leds3off.set_timer_limit  = 1000;   // set period for led as time ON
     timer_leds3off.ready_to_use = 1;
     timer_leds3off.common_rule = &leds_position;
 
@@ -520,12 +546,41 @@ void drv_usr_init_timer_and_scheduler (void) {
     timer_leds4on.ready_to_use = 1;
     timer_leds4on.common_rule = &leds_position;
     timer_leds4off.timer_is_set = 1;
-    timer_leds4off.set_timer_limit  = 10000;   // set period for led as time ON
+    timer_leds4off.set_timer_limit  = 1000;   // set period for led as time ON
     timer_leds4off.ready_to_use = 1;
     timer_leds4off.common_rule = &leds_position;
 
     timer_leds5x8.timer_is_set = 1;
-    timer_leds5x8.set_timer_limit  = 200; // set period for 5x8 7-segment display
+    timer_leds5x8.set_timer_limit  = 100; // set period for 5x8 7-segment display
+
+    timer_count.timer_is_set = 1;
+    timer_count.set_timer_limit  = 100; // set period for 5x8 7-segment display
+}
+//******************************************************************************
+
+
+
+//******************************************************************************
+t_timer_stat delay_timer_count (uint8_t cfg) {
+t_timer_stat err_code = _TIMER_NOT_READY;
+	if (cfg==0) {
+		timer_count.cur_timer_val=0;
+	}
+
+	if (cfg=='?') {
+		if ( timer_count.timer_is_set ) {
+			timer_count.cur_timer_val++;
+			if ( timer_count.cur_timer_val >= timer_count.set_timer_limit ) {
+				err_code = _TIMER_READY;
+			} else {
+				err_code = _TIMER_NOT_READY;
+			}
+		} else {
+			err_code = _TIMER_NOT_READY;
+		}
+	}
+
+	return err_code;
 }
 //******************************************************************************
 
@@ -588,10 +643,10 @@ char* IntToStr(int i, char b[]) {
 // Number in to string converter
 //******************************************************************************
 // itoa
-char* FloatToStr(float ff, char b[]) {
+char* FloatToLeds5x8(float ff, char b[]) {
     char const digit[] = "0123456789";
     char *p = b;
-    int shifter, i;
+    int shifter=0, i=0, pos=0, stepen=0, mux=0, in1=0;
     float ostatok;
 
     ostatok = ff-(int)ff;
@@ -603,6 +658,23 @@ char* FloatToStr(float ff, char b[]) {
     if (ostatok<1) ostatok*=1000;
 
     i = ff;
+    in1 = (int)ff;
+
+	for (pos=0; pos<5; pos++) {
+		switch (pos){
+			case 0: mux=0; break;
+			case 1: mux=10; break;
+			case 2: mux=100; break;
+			case 3: mux=1000; break;
+			case 4: mux=10000; break;
+			case 5: mux=100000; break;
+		}
+		for ( stepen=0; (uint16_t)(in1-(stepen*mux))<mux; stepen++ ) {
+			if (stepen<pos) {
+				b[pos]=stepen;
+			}
+		}
+    }
 
     if (i<0) {
         *p++ = '-';
@@ -636,44 +708,219 @@ char* FloatToStr(float ff, char b[]) {
 //******************************************************************************
 
 
-char data[5]={'1','3','5','7','9'};
+
+//******************************************************************************
+char *ultostr(unsigned long value, char *ptr, int base)
+{
+  unsigned long t = 0, res = 0;
+  unsigned long tmp = value;
+  int count = 0;
+
+  if (NULL == ptr) {
+    return NULL;
+  }
+
+  if (tmp == 0) {
+    count++;
+  }
+
+  while(tmp > 0) {
+    tmp = tmp/base;
+    count++;
+  }
+
+  ptr += count;
+  *ptr = '\0';
+
+  do {
+    res = value - base * (t = value / base);
+    if (res < 10) {
+      * -- ptr = '0' + res;
+    } else
+    if ((res >= 10) && (res < 16)) {
+        * --ptr = 'A' - 10 + res;
+    }
+  } while ((value = t) != 0);
+
+  return(ptr);
+}//******************************************************************************
+
+
+
+//******************************************************************************
+char *ftostr(float value, char *ptr, int base, uint8_t *comma)
+{
+  unsigned long t=0, res=0;
+  unsigned long tmp=value;
+  unsigned long val=0;
+  int           count=0;
+  float         ostatok_float=0;
+  uint32_t      celoe=0, ostatok_int=0;
+  uint8_t       less_then_1=0;
+  uint8_t       dlina_ostatka=0;
+
+  if (NULL == ptr) {
+    return NULL;
+  }
+
+  if (NULL == comma) {
+    return NULL;
+  }
+
+  /*if (tmp == 0) {
+    count++;
+  }
+
+  while(tmp > 0) {
+    tmp = tmp/base;
+    count++;
+  }*/
+
+  celoe = (int)value;
+  ostatok_float = value - celoe;
+
+  if (celoe<1) {
+	  *comma=0;
+  	  less_then_1 = 1;
+		ostatok_int = (uint32_t)((ostatok_float * 10000));
+		dlina_ostatka = 5 - (*comma);
+		ptr += 0;
+  }
+  else
+  if (celoe<10) {
+	  *comma=0;
+		ostatok_int = (uint32_t)((ostatok_float * 10000));
+		dlina_ostatka = 5 - (*comma+1);
+		ptr += 1;
+  }
+  else
+  if (celoe<100) {
+	  *comma=1;
+		ostatok_int = (uint32_t)((ostatok_float * 1000));
+		dlina_ostatka = 5 - (*comma+1);
+		ptr += 2;
+  }
+  else
+  if (celoe<1000) {
+	  *comma=2;
+		ostatok_int = (uint32_t)((ostatok_float * 100));
+		dlina_ostatka = 5 - (*comma+1);
+		ptr += 3;
+  }
+  else
+  if (celoe<10000) {
+	  *comma=3;
+		ostatok_int = (uint32_t)((ostatok_float * 10));
+		dlina_ostatka = 5 - (*comma+1);
+		ptr += 4;
+  }
+  else
+  if (celoe<100000) {
+	  *comma=4;
+		ostatok_int = (uint32_t)((ostatok_float * 1));
+		dlina_ostatka = 5 - (*comma+1);
+		ptr += 5;
+  }
+
+//  ptr += count;
+//  *ptr = '\0';  // set first 0
+
+  val = value;
+
+  do {  // display - Celoe
+	t = val / base;
+    res = val - base * t; // res = drobnaya ot value
+    if (res < 10) {
+      *--ptr = '0' + res;
+    }
+  } while ((val = t) != 0);
+
+  if (celoe<1) { ptr += 5;  }
+  else
+  if (celoe<10) { ptr += 4; }
+  else
+  if (celoe<100) { ptr += 4; }
+  else
+  if (celoe<1000) { ptr += 4; }
+  else
+  if (celoe<10000) { ptr += 4; }
+  else
+  if (celoe<100000) { ptr += 4; }
+
+  if (*comma<5) { // Display - Ostatok
+      //*--ptr = '0' + res;
+	  do {
+	    if (dlina_ostatka>0) {
+			t = ostatok_int / base;
+			res = ostatok_int - base * t; // res = drobnaya ot value
+			if (res < 10) {
+			  *ptr-- = '0' + res;
+			}
+	      dlina_ostatka--;
+	    }
+	  } while ( (ostatok_int=t)!=0 || dlina_ostatka!=0 );
+  }
+
+  return(ptr);
+}//******************************************************************************
+
+
+
+char data[5] ={ 1,  3,  5,  7,  9 };
+char datas[5]={'1','3','5','7','9'};
+
 
 //******************************************************************************
 // Blinks on the leds and indicator.
 //******************************************************************************
 int main (void) {
-    volatile uint32_t nn;
+    volatile uint32_t pos;
     volatile uint32_t cnt=0;
-    char *tmp;
-    float in=-47.531;
+    char    *tmp;
+    float   in=0;
+    uint8_t comma;
+	char    *p_str;
+
+	//double num=34267;
+	//char   output[10];
+	//snprintf(output,10,"%f",num);
+
+	//char buffer [50];
+	//unsigned long a = 5;
+	//int n;
+	//n=sprintf (buffer, "%lu", a);
 
     //SysCtlClockSet(SYSCTL_SYSDIV_1|SYSCTL_USE_OSC|SYSCTL_OSC_MAIN|SYSCTL_XTAL_16MHZ);
     //SysCtlPWMClockSet(SYSCTL_PWMDIV_1); //Set the PWM clock to the system clock.
 
     drv_sys_init_gpio ();
     drv_usr_init_led_7segments ();
-    drv_usr_init_timer_and_scheduler ();
+    drv_usr_init_scheduler_and_all_timers ();
 
-	double num=34267;
-	char   output[10];
-	//snprintf(output,10,"%f",num);
+    in = 0.0001;
 
 	while(1) {  // Loop forever.
 		if (  _TIMER_READY == delay_timer_leds5x8('?') ) {
-			if ( nn < 5 ) {
+			if ( _TIMER_READY == delay_timer_count('?') ) {
+				in+=0.0001;
+				delay_timer_count(0);
+			}
+			if ( pos < 5 ) {
 				//tmp = ltoa(in, (char *)data); // ltoa - max string 34 bytes.
-				//tmp = FloatToStr(in, data); // ltoa - max string 34 bytes.
-				drv_led_7segments_position ( nn ); // dinamic switching
-				drv_led_7segments_symbol   ( data/*output*/[nn]/*&0x0F*/ ); // display info
-				nn++;
+				//tmp = IntToStr(in, (char *)data); // ltoa - max string 34 bytes.
+				//tmp = FloatToLeds5x8(in, data); // ltoa - max string 34 bytes.
+				//ultostr(56789,data,10); //  value, *ptr, base
+				p_str = ftostr ( in, data, 10, &comma ); // value, *ptr, base, *comma_possition
+				drv_led_7segments_symbol (pos, data[pos], comma); // display info
+				drv_led_7segments_position (pos); // dinamic switching
+				pos++;
 				cnt++;
     		} else {
-				nn = 0;
+				pos = 0;
     		}
 			delay_timer_leds5x8(0);
     	}
-
-    	drv_led_blink ();
+		drv_led_blink ();
     }
 }
 //******************************************************************************
