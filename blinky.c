@@ -20,8 +20,12 @@
 #include "driverlib/uart.h"
 #include "utils/uartstdio.h"
 
-//typedef  enum { FALSE, TRUE } bool;
+//#include "inc/hw_types.h"
+//#include "drivers/pinout.h"
+//#include "driverlib/rom.h"
+//#include "driverlib/rom_map.h"
 
+//typedef  enum { FALSE, TRUE } bool;
 
 
 //*****************************************************************************
@@ -49,10 +53,13 @@
 #define _LEDS_POS_V_SET   ( GPIO_PORTM_DATA_R |=  (1<<6) )     // Anod (Common) 0
 #define _LEDS_POS_V_CLR   ( GPIO_PORTM_DATA_R &= ~(1<<6) )     // Anod (Common) 0
 //******************************************************************************
+#define  BTN_PCS_0  (1)
+#define  BTN_PCS_1  (2)
+//******************************************************************************
 
 
 // LEDS[0,1,2,3]=[PN1,PN0,PF4,PF0]
-// USER_SWITCH[0,1]=[JP0,JP1]
+// USER_SWITCH[0,1]=[PJ0,PJ1]
 
 //******************************************************************************
 // TYPES
@@ -118,6 +125,56 @@ char *ftostr(float value, char *ptr, int base, uint8_t *comma);
 void drv_sys_init_gpio ( void ) {
     volatile uint32_t ui32Loop;
 
+/*
+Datasheet @ page 757 @
+Texas Instruments-Production Data @ Tiva TM4C1294NCPDT Microcontroller
+Table 10-7. GPIO Register Map
+
+Offset 	Name Type 	Reset 					Description page
+0x000 	GPIODATA 	RW 		0x0000.0000 	GPIO Data 759
+0x400 	GPIODIR 	RW 		0x0000.0000 	GPIO Direction 760
+0x404 	GPIOIS 		RW 		0x0000.0000 	GPIO Interrupt Sense 761
+0x408 	GPIOIBE 	RW 		0x0000.0000 	GPIO Interrupt Both Edges 762
+0x40C 	GPIOIEV 	RW 		0x0000.0000 	GPIO Interrupt Event 763
+0x410 	GPIOIM 		RW 		0x0000.0000 	GPIO Interrupt Mask 764
+0x414 	GPIORIS 	RO 		0x0000.0000 	GPIO Raw Interrupt Status 765
+0x418 	GPIOMIS 	RO 		0x0000.0000 	GPIO Masked Interrupt Status 767
+0x41C 	GPIOICR 	W1C 	0x0000.0000 	GPIO Interrupt Clear 769
+0x420 	GPIOAFSEL 	RW 		- 				GPIO Alternate Function Select 770
+0x500 	GPIODR2R 	RW 		0x0000.00FF 	GPIO 2-mA Drive Select 772
+0x504 	GPIODR4R 	RW 		0x0000.0000 	GPIO 4-mA Drive Select 773
+0x508 	GPIODR8R 	RW 		0x0000.0000 	GPIO 8-mA Drive Select 774
+0x50C 	GPIOODR 	RW 		0x0000.0000 	GPIO Open Drain Select 775
+0x510 	GPIOPUR 	RW 		- 				GPIO Pull-Up Select 776
+0x514 	GPIOPDR 	RW 		0x0000.0000 	GPIO Pull-Down Select 778
+0x518 	GPIOSLR 	RW 		0x0000.0000 	GPIO Slew Rate Control Select 780
+0x51C 	GPIODEN 	RW 		- 				GPIO Digital Enable 781
+0x520 	GPIOLOCK 	RW 		0x0000.0001 	GPIO Lock 783
+0x524 	GPIOCR 		- 		- 				GPIO Commit 784
+0x528 	GPIOAMSEL 	RW 		0x0000.0000 	GPIO Analog Mode Select 786
+0x52C 	GPIOPCTL 	RW 		- 				GPIO Port Control 787
+0x530 	GPIOADCCTL 	RW 		0x0000.0000 	GPIO ADC Control 789
+0x534 	GPIODMACTL 	RW 		0x0000.0000 	GPIO DMA Control 790
+0x538 	GPIOSI 		RW 		0x0000.0000 	GPIO Select Interrupt 791
+0x53C 	GPIODR12R 	RW 		0x0000.0000 	GPIO 12-mA Drive Select 792
+0x540 	GPIOWAKEPEN RW 		0x0000.0000 	GPIO Wake Pin Enable 793
+0x544 	GPIOWAKELVL RW 		0x0000.0000 	GPIO Wake Level 795
+0x548 	GPIOWAKESTAT RO 	0x0000.0000 	GPIO Wake Status 797
+0xFC0 	GPIOPP 		RO 		0x0000.0001 	GPIO Peripheral Property 799
+0xFC4 	GPIOPC 		RW 		0x0000.0000 	GPIO Peripheral Configuration 800
+0xFD0 	GPIOPeriphID4 RO 	0x0000.0000 	GPIO Peripheral Identification 4 803
+0xFD4 	GPIOPeriphID5 RO 	0x0000.0000 	GPIO Peripheral Identification 5 804
+0xFD8 	GPIOPeriphID6 RO 	0x0000.0000 	GPIO Peripheral Identification 6 805
+0xFDC 	GPIOPeriphID7 RO 	0x0000.0000 	GPIO Peripheral Identification 7 806
+0xFE0 	GPIOPeriphID0 RO 	0x0000.0061 	GPIO Peripheral Identification 0 807
+0xFE4 	GPIOPeriphID1 RO 	0x0000.0000 	GPIO Peripheral Identification 1 808
+0xFE8 	GPIOPeriphID2 RO 	0x0000.0018 	GPIO Peripheral Identification 2 809
+0xFEC 	GPIOPeriphID3 RO 	0x0000.0001 	GPIO Peripheral Identification 3 810
+0xFF0 	GPIOPCellID0 RO 	0x0000.000D 	GPIO PrimeCell Identification 0 811
+0xFF4 	GPIOPCellID1 RO 	0x0000.00F0 	GPIO PrimeCell Identification 1 812
+0xFF8 	GPIOPCellID2 RO 	0x0000.0005 	GPIO PrimeCell Identification 2 813
+0xFFC 	GPIOPCellID3 RO 	0x0000.00B1 	GPIO PrimeCell Identification 3 814 */
+
     // Enable the GPIO port that is used for the on-board LED.
     SYSCTL_RCGCGPIO_R =
 		SYSCTL_RCGCGPIO_R14 | //SYSCTL_RCGCGPIO_R14=GPIO Port Q Run Mode Clock
@@ -125,6 +182,7 @@ void drv_sys_init_gpio ( void ) {
     	SYSCTL_RCGCGPIO_R12 | //SYSCTL_RCGCGPIO_R12=GPIO Port N Run Mode Clock
 		SYSCTL_RCGCGPIO_R11 | //SYSCTL_RCGCGPIO_R11=GPIO Port M Run Mode Clock
     	SYSCTL_RCGCGPIO_R9  | //SYSCTL_RCGCGPIO_R9= GPIO Port K Run Mode Clock
+    	SYSCTL_RCGCGPIO_R8  | //SYSCTL_RCGCGPIO_R8= GPIO Port J Run Mode Clock
     	SYSCTL_RCGCGPIO_R5  | //SYSCTL_RCGCGPIO_R5= GPIO Port F Run Mode Clock
     	SYSCTL_RCGCGPIO_R1  | //SYSCTL_RCGCGPIO_R1= GPIO Port B Run Mode Clock
     	SYSCTL_RCGCGPIO_R0  ; //SYSCTL_RCGCGPIO_R0= GPIO Port A Run Mode Clock
@@ -157,7 +215,16 @@ void drv_sys_init_gpio ( void ) {
     // enable the GPIO pin for digital function.
     GPIO_PORTF_AHB_DIR_R |= 0x01;
     GPIO_PORTF_AHB_DEN_R |= 0x01;
-    //GPIO_PORTF_AHB_PCTL_R;
+
+
+    // Enable the GPIO pin for the SW0 (PJ0).  Set the direction as input, and
+    // enable the GPIO pin for digital function.
+    GPIO_PORTJ_AHB_DIR_R |= 0x00;
+    GPIO_PORTJ_AHB_DEN_R |= 0x03; // SW0 and SW1: 0x01 and 0x02
+    GPIO_PORTJ_AHB_PUR_R |= 0x03; // Pull-Up Resistor
+    GPIO_PORTJ_AHB_PP_R = 1;
+    GPIO_PORTJ_AHB_PC_R = 3;
+
 }
 //******************************************************************************
 
@@ -821,6 +888,13 @@ char *ftostr(float value, char *ptr, int base, uint8_t *comma)
 		dlina_ostatka = 5 - (*comma+1);
 		ptr += 5;
   }
+  else
+  if (celoe<1000000) {
+	  *comma=4;
+		ostatok_int = (uint32_t)((ostatok_float * 0));
+		dlina_ostatka = 5 - (*comma+1);
+		ptr += 6;
+  }
 
 //  ptr += count;
 //  *ptr = '\0';  // set first 0
@@ -846,6 +920,8 @@ char *ftostr(float value, char *ptr, int base, uint8_t *comma)
   if (celoe<10000) { ptr += 4; }
   else
   if (celoe<100000) { ptr += 4; }
+  else
+  if (celoe<1000000) { ptr += 4; }
 
   if (*comma<5) { // Display - Ostatok
       //*--ptr = '0' + res;
@@ -897,12 +973,15 @@ int main (void) {
     drv_usr_init_led_7segments ();
     drv_usr_init_scheduler_and_all_timers ();
 
+    //ROM_GPIOPinTypeGPIOInput(GPIO_PORTJ_BASE, GPIO_PIN_0);
+    //ROM_GPIOPinTypeGPIOInput(GPIO_PORTJ_BASE, GPIO_PIN_1);
+
     in = 0.0001;
 
 	while(1) {  // Loop forever.
 		if (  _TIMER_READY == delay_timer_leds5x8('?') ) {
 			if ( _TIMER_READY == delay_timer_count('?') ) {
-				in+=0.0001;
+				//in+=0.0001;
 				delay_timer_count(0);
 			}
 			if ( pos < 5 ) {
@@ -921,6 +1000,30 @@ int main (void) {
 			delay_timer_leds5x8(0);
     	}
 		drv_led_blink ();
+
+		if ( (GPIO_PORTJ_AHB_DATA_R & 0x03) == BTN_PCS_0 ) {
+			if ( in<1 ) in += 0.00001;
+			else
+			if ( in<10 ) in += 0.0001;
+			else
+			if ( in<100 ) in += 0.001;
+			else
+			if ( in<1000 ) in += 0.01;
+			else
+			if ( in<10000 ) in += 0.1;
+		}
+		if ( (GPIO_PORTJ_AHB_DATA_R & 0x03) == BTN_PCS_1 ) {
+			if ( in>0 )
+			if ( in<1 ) in -= 0.00001;
+			else
+			if ( in<10 ) in -= 0.0001;
+			else
+			if ( in<100 ) in -= 0.001;
+			else
+			if ( in<1000 ) in -= 0.01;
+			else
+			if ( in<10000 ) in -= 0.1;
+		}
     }
 }
 //******************************************************************************
