@@ -69,6 +69,7 @@ typedef enum {
 	_TIMER_NOT_READY = 1
 } t_timer_stat;
 
+/* Discriptor of timer settings */
 typedef struct {
 	uint8_t    ready_to_use   :1;
 	uint8_t    timer_is_set   :1;
@@ -76,6 +77,29 @@ typedef struct {
 	uint32_t   cur_timer_val;
 	uint32_t  *common_rule;
 } t_Scheduler;
+
+/* Discriptor of I/O */
+typedef struct {
+	float    in;
+	uint8_t  x;
+	uint8_t  y;
+} t_io_values;
+
+/* Discriptor of zmeyka */
+typedef struct {
+	uint32_t  *body;
+	uint32_t  *eats;
+	uint32_t  len       :4;  // Lenght
+	uint32_t  direction :2;  // 0:Up, 1:Down, 2:Left, 3:Right
+	uint32_t  blinkhead :2;  // Blinking state for head of Snake
+	uint32_t  curr_x    :3;  // Current position of head, axis X
+	uint32_t  curr_y    :4;  // Current position of head, axis X
+	uint32_t  next_x    :3;  // Calculated next position of head, axis X
+	uint32_t  next_y    :4;  // Calculated next position of head, axis X
+	uint32_t  algo_step :4;  // Algorithm step
+	uint32_t  rezerv    :6;  // ...
+} t_io_Snake;
+
 //******************************************************************************
 
 
@@ -96,7 +120,7 @@ uint32_t  dly2 = 0;
 uint32_t  dly3 = 0;
 uint32_t  dly4 = 0;
 
-uint32_t    leds_position = 1;
+uint32_t    leds_position;
 //******************************************************************************
 
 
@@ -115,7 +139,7 @@ t_timer_stat delay_timer_leds5x8 (uint8_t cfg);
 char* IntToStr(int i, char b[]);
 char* FloatToLeds5x8(float ff, char b[]);
 char *ultostr(unsigned long value, char *ptr, int base);
-char *ftostr(float value, char *ptr, int base, uint8_t *comma);
+char *ftostr(float value, char *p_string, int base, uint8_t *p_comma);
 //******************************************************************************
 
 
@@ -518,7 +542,7 @@ void drv_led_7segments_symbol ( uint8_t position, uint8_t symbol, uint8_t comma 
 
 
 //******************************************************************************
-void drv_led_8x8 ( uint8_t x, uint8_t y, uint8_t t ) {
+void drv_led_8x8_pixel_set ( uint8_t x, uint8_t y, uint8_t t ) {
 	GPIO_PORTC_AHB_DATA_R |=  (1<<4); // Cathod - X0
 	GPIO_PORTC_AHB_DATA_R |=  (1<<5); // Cathod - X1
 	GPIO_PORTC_AHB_DATA_R |=  (1<<6); // Cathod - X2
@@ -691,7 +715,7 @@ void drv_usr_init_scheduler_and_all_timers (void) {
     timer_leds1on.ready_to_use = 1;
     timer_leds1on.common_rule = &leds_position;
     timer_leds1off.timer_is_set = 1;
-    timer_leds1off.set_timer_limit  = 10000;   // set period for led as time ON
+    timer_leds1off.set_timer_limit  = 1000;   // set period for led as time ON
     timer_leds1off.ready_to_use = 1;
     timer_leds1off.common_rule = &leds_position;
 
@@ -700,7 +724,7 @@ void drv_usr_init_scheduler_and_all_timers (void) {
     timer_leds2on.ready_to_use = 1;
     timer_leds2on.common_rule = &leds_position;
     timer_leds2off.timer_is_set = 1;
-    timer_leds2off.set_timer_limit  = 10000;   // set period for led as time ON
+    timer_leds2off.set_timer_limit  = 1000;   // set period for led as time ON
     timer_leds2off.ready_to_use = 1;
     timer_leds2off.common_rule = &leds_position;
 
@@ -709,7 +733,7 @@ void drv_usr_init_scheduler_and_all_timers (void) {
     timer_leds3on.ready_to_use = 1;
     timer_leds3on.common_rule = &leds_position;
     timer_leds3off.timer_is_set = 1;
-    timer_leds3off.set_timer_limit  = 10000;   // set period for led as time ON
+    timer_leds3off.set_timer_limit  = 1000;   // set period for led as time ON
     timer_leds3off.ready_to_use = 1;
     timer_leds3off.common_rule = &leds_position;
 
@@ -718,7 +742,7 @@ void drv_usr_init_scheduler_and_all_timers (void) {
     timer_leds4on.ready_to_use = 1;
     timer_leds4on.common_rule = &leds_position;
     timer_leds4off.timer_is_set = 1;
-    timer_leds4off.set_timer_limit  = 10000;   // set period for led as time ON
+    timer_leds4off.set_timer_limit  = 1000;   // set period for led as time ON
     timer_leds4off.ready_to_use = 1;
     timer_leds4off.common_rule = &leds_position;
 
@@ -945,94 +969,74 @@ char *ultostr(unsigned long value, char *ptr, int base)
   } while ((value = t) != 0);
 
   return(ptr);
-}//******************************************************************************
+}
+//******************************************************************************
 
 
 
 //******************************************************************************
-char *ftostr(float value, char *ptr, int base, uint8_t *comma)
+char *ftostr(float value, char *p_string, int base, uint8_t *p_comma)
 {
-  unsigned long t=0, res=0;
-  unsigned long tmp=value;
+  unsigned long t=0;
+  unsigned long res=0;
   unsigned long val=0;
-  int           count=0;
   float         ostatok_float=0;
   uint32_t      celoe=0, ostatok_int=0;
-  uint8_t       less_then_1=0;
   uint8_t       dlina_ostatka=0;
 
-  if (NULL == ptr) {
+  if (NULL == p_string) {
     return NULL;
   }
 
-  if (NULL == comma) {
+  if (NULL == p_comma) {
     return NULL;
   }
-
-  /*if (tmp == 0) {
-    count++;
-  }
-
-  while(tmp > 0) {
-    tmp = tmp/base;
-    count++;
-  }*/
 
   celoe = (int)value;
   ostatok_float = value - celoe;
 
   if (celoe<1) {
-	  *comma=0;
-  	  less_then_1 = 1;
+	  *p_comma=0;
 		ostatok_int = (uint32_t)((ostatok_float * 10000));
-		dlina_ostatka = 5 - (*comma);
-		ptr += 0;
-  }
-  else
+		dlina_ostatka = 5 - (*p_comma);
+		p_string += 0;
+  } else
   if (celoe<10) {
-	  *comma=0;
+	  *p_comma=0;
 		ostatok_int = (uint32_t)((ostatok_float * 10000));
-		dlina_ostatka = 5 - (*comma+1);
-		ptr += 1;
-  }
-  else
+		dlina_ostatka = 5 - (*p_comma+1);
+		p_string += 1;
+  } else
   if (celoe<100) {
-	  *comma=1;
+	  *p_comma=1;
 		ostatok_int = (uint32_t)((ostatok_float * 1000));
-		dlina_ostatka = 5 - (*comma+1);
-		ptr += 2;
-  }
-  else
+		dlina_ostatka = 5 - (*p_comma+1);
+		p_string += 2;
+  } else
   if (celoe<1000) {
-	  *comma=2;
+	  *p_comma=2;
 		ostatok_int = (uint32_t)((ostatok_float * 100));
-		dlina_ostatka = 5 - (*comma+1);
-		ptr += 3;
-  }
-  else
+		dlina_ostatka = 5 - (*p_comma+1);
+		p_string += 3;
+  } else
   if (celoe<10000) {
-	  *comma=3;
+	  *p_comma=3;
 		ostatok_int = (uint32_t)((ostatok_float * 10));
-		dlina_ostatka = 5 - (*comma+1);
-		ptr += 4;
-  }
-  else
+		dlina_ostatka = 5 - (*p_comma+1);
+		p_string += 4;
+  } else
   if (celoe<100000) {
-	  *comma=4;
+	  *p_comma=4;
 		ostatok_int = (uint32_t)((ostatok_float * 1));
-		dlina_ostatka = 5 - (*comma+1);
-		ptr += 5;
-  }
-  else
+		dlina_ostatka = 5 - (*p_comma+1);
+		p_string += 5;
+  } else
   if (celoe<1000000) {
-	  *comma=4;
+	  *p_comma=4;
 		ostatok_int = (uint32_t)((ostatok_float * 0));
-		dlina_ostatka = 5 - (*comma+1);
-		ptr += 6;
+		dlina_ostatka = 5 - (*p_comma+1);
+		p_string += 6;
   }
-
-//  ptr += count;
-//  *ptr = '\0';  // set first 0
 
   val = value;
 
@@ -1040,73 +1044,133 @@ char *ftostr(float value, char *ptr, int base, uint8_t *comma)
 	t = val / base;
     res = val - base * t; // res = drobnaya ot value
     if (res < 10) {
-      *--ptr = '0' + res;
+      *--p_string = '0' + res;
     }
   } while ((val = t) != 0);
 
-  if (celoe<1) { ptr += 5;  }     else
-  if (celoe<10) { ptr += 4; }     else
-  if (celoe<100) { ptr += 4; }    else
-  if (celoe<1000) { ptr += 4; }   else
-  if (celoe<10000) { ptr += 4; }  else
-  if (celoe<100000) { ptr += 4; } else
-  if (celoe<1000000) { ptr += 4; }
+  if (celoe<1) { p_string += 5;  }     else
+  if (celoe<10) { p_string += 4; }     else
+  if (celoe<100) { p_string += 4; }    else
+  if (celoe<1000) { p_string += 4; }   else
+  if (celoe<10000) { p_string += 4; }  else
+  if (celoe<100000) { p_string += 4; } else
+  if (celoe<1000000) { p_string += 4; }
 
-  if (*comma<5) { // Display - Ostatok
-      //*--ptr = '0' + res;
+  if (*p_comma<5) { // Display - Ostatok
 	  do {
 	    if (dlina_ostatka>0) {
 			t = ostatok_int / base;
 			res = ostatok_int - base * t; // res = drobnaya ot value
 			if (res < 10) {
-			  *ptr-- = '0' + res;
+			  *p_string-- = '0' + res;
 			}
 	      dlina_ostatka--;
 	    }
 	  } while ( (ostatok_int=t)!=0 || dlina_ostatka!=0 );
   }
 
-  return(ptr);
-}//******************************************************************************
+  return(p_string);
+}
+//******************************************************************************
 
+
+
+//******************************************************************************
+void scan_keys ( t_io_values *p_io )
+{
+	//if ( y_pos<16) { y_pos++; } else y_pos=0;
+
+	if ( (GPIO_PORTJ_AHB_DATA_R & 0x03) == BTN_PCS_0 ) {
+		if ( p_io->in<99999 )
+		if ( p_io->in<1 ) p_io->in += 0.0001; else
+		if ( p_io->in<10 ) p_io->in += 0.001; else
+		if ( p_io->in<100 ) p_io->in += 0.01; else
+		if ( p_io->in<1000 ) p_io->in += 0.1; else
+		if ( p_io->in<10000 ) p_io->in +=  1;
+
+		if ( ++p_io->x>7 ) p_io->x=0;
+	}
+	if ( (GPIO_PORTJ_AHB_DATA_R & 0x03) == BTN_PCS_1 ) {
+		if ( p_io->in>0 )
+		if ( p_io->in<1 ) p_io->in -= 0.0001; else
+		if ( p_io->in<10 ) p_io->in -= 0.001; else
+		if ( p_io->in<100 ) p_io->in -= 0.01; else
+		if ( p_io->in<1000 ) p_io->in -= 0.1; else
+		if ( p_io->in<10000 ) p_io->in -=  1;
+
+		if ( ++p_io->y>15 ) p_io->y=0;
+	}
+}
+//******************************************************************************
+
+
+typedef enum {
+	S_START_RANDOM = 0,
+	S_BEGIN,
+	S_MOVE,
+	S_EAT_YES,
+	S_EAT_NO,
+	S_RANDOM,
+	S_CHANGE_DIRECTION,
+	S_BORDER_END
+} algo_step;
+
+//******************************************************************************
+void algo_Snake ( t_io_values *p_io,  t_io_Snake *p_snake ) {
+/*
+ * ) Set startup values (Random?)
+ * )     <--------------------------------------------------------------------.
+ * ) Check direction, check border limit    <-------------------------------. |
+ * ) Replase last-bit into position which before head (...now it head...!)  | |
+ * ) If exist Eat-bit, enlarge for length                                   | |
+ * ) ...If no, do jump to ----------------------------------------------------'
+ * ) random                                                                 |
+ * ) if border limits is OK, direction to left/right/up/down ---------------'
+ * ) ...If border is limited ->End
+ * )
+ */
+
+}
+//******************************************************************************
 
 
 char data[5] ={ 1,  3,  5,  7,  9 };
 char datas[5]={'1','3','5','7','9'};
 
-
 //******************************************************************************
 // Blinks on the leds and indicator.
 //******************************************************************************
 int main (void) {
-    volatile uint32_t pos;
-    volatile uint32_t cnt=0;
-    char    *tmp;
-    float   in=0;
-    uint8_t comma;
-    uint8_t x_pos=0, y_pos=0;
-	char    *p_str;
+    volatile uint32_t   pos;
+    volatile uint32_t   cnt=0;
+    char       *tmp;
+	char       *p_str;
+    uint8_t     comma;
+	t_io_values io;
+	t_io_Snake  snake;
 
     drv_sys_init_gpio ();
     drv_usr_init_led_7segments ();
     drv_usr_init_led_8x8 ();
     drv_usr_init_scheduler_and_all_timers ();
 
-    in = 0.0001;
+    leds_position = 1;
+    io.in = 0.0001; // Set to default value
 
 	while(1) {  // Loop forever.
-		if (  _TIMER_READY == delay_timer_leds5x8('?') ) {
-			if ( _TIMER_READY == delay_timer_count('?') ) {
-				//in+=0.0001;
-				delay_timer_count(0);
-			}
+		if ( _TIMER_READY == delay_timer_count('?') ) {
+			//io.in += 0.0001;
+			delay_timer_count(0);
+		}
+		if ( _TIMER_READY == delay_timer_leds5x8('?') ) {
 			if ( pos < 5 ) {
-				p_str = ftostr ( in, data, 10, &comma ); // value, *ptr, base, *comma_possition
-				drv_led_7segments_symbol (pos, data[pos], comma); // display info
-				drv_led_7segments_position (pos); // dinamic switching
-				drv_led_8x8( x_pos/*x*/, y_pos/*y*/, 1/*t*/ ); // display info
+				p_str = ftostr ( io.in, data, 10, &comma ); // value, *ptr, base, *comma_possition
+				drv_led_7segments_symbol ( pos, data[pos], comma ); // display info
+				drv_led_7segments_position ( pos ); // dinamic switching
+				drv_led_8x8_pixel_set ( io.x, io.y, 0 ); // display info
 				pos++;
 				cnt++;
+				algo_Snake ( &io, &snake );
     		} else {
 				pos = 0;
     		}
@@ -1115,29 +1179,7 @@ int main (void) {
 		drv_led_blink ();
 
 		if (  _TIMER_READY == delay_timer_keys_usr1_2('?') ) {
-
-			//if ( y_pos<16) { y_pos++; } else y_pos=0;
-
-			if ( (GPIO_PORTJ_AHB_DATA_R & 0x03) == BTN_PCS_0 ) {
-				if ( in<1 ) in += 0.00001; else
-				if ( in<10 ) in += 0.0001; else
-				if ( in<100 ) in += 0.001; else
-				if ( in<1000 ) in += 0.01; else
-				if ( in<10000 ) in += 0.1;
-
-				if ( ++x_pos>7 ) x_pos=0;
-			}
-			if ( (GPIO_PORTJ_AHB_DATA_R & 0x03) == BTN_PCS_1 ) {
-				if ( in>0 )
-				if ( in<1 ) in -= 0.00001; else
-				if ( in<10 ) in -= 0.0001; else
-				if ( in<100 ) in -= 0.001; else
-				if ( in<1000 ) in -= 0.01; else
-				if ( in<10000 ) in -= 0.1;
-
-				if ( ++y_pos>15 ) y_pos=0;
-			}
-
+			scan_keys ( &io );
 			delay_timer_keys_usr1_2(0);
 		}
     }
