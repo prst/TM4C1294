@@ -56,6 +56,8 @@
 #define  BTN_PCS_0  (1)
 #define  BTN_PCS_1  (2)
 //******************************************************************************
+#define  error_forever_loop   for(;;){}
+//******************************************************************************
 
 
 // LEDS[0,1,2,3]=[PN1,PN0,PF4,PF0]
@@ -87,8 +89,9 @@ typedef struct {
 
 /* Discriptor of zmeyka */
 typedef struct {
-	uint32_t  *body;
-	uint32_t  *eats;
+	uint8_t   *body;
+	uint8_t   *ptr_field;
+	uint8_t   *ptr_field_eat;
 	uint32_t  len       :4;  // Lenght
 	uint32_t  direction :2;  // 0:Up, 1:Down, 2:Left, 3:Right
 	uint32_t  blinkhead :2;  // Blinking state for head of Snake
@@ -98,7 +101,26 @@ typedef struct {
 	uint32_t  next_y    :4;  // Calculated next position of head, axis X
 	uint32_t  algo_step :4;  // Algorithm step
 	uint32_t  rezerv    :6;  // ...
+	uint32_t  rnd;           // Random value
 } t_io_Snake;
+
+typedef enum {
+	RC_OK = 0,
+	RC_PTR_FAIL,
+	RC_FAILED
+} t_ret_code;
+
+typedef enum {
+	S_INIT = 0,
+	S_START_RANDOM,
+	S_BEGIN,
+	S_MOVE,
+	S_EAT_YES,
+	S_EAT_NO,
+	S_RANDOM,
+	S_CHANGE_DIRECTION,
+	S_BORDER_END
+} t_algo_step;
 
 //******************************************************************************
 
@@ -119,27 +141,33 @@ uint32_t  dly1 = 0;
 uint32_t  dly2 = 0;
 uint32_t  dly3 = 0;
 uint32_t  dly4 = 0;
+uint32_t  leds_position;
 
-uint32_t    leds_position;
+uint8_t   a_field [8][16];
+uint8_t   a_field_eat [8][16];
+uint8_t   data [5] = { 1,  3,  5,  7,  9 };
+uint8_t   datas[5] = {'1','3','5','7','9'};
+
 //******************************************************************************
 
 
 
-
 //******************************************************************************
-void drv_sys_init_gpio ( void );
-void drv_usr_init_led_7segments ( void );
-void drv_usr_init_led_8x8 ( void );
-void drv_led_7segments_position (unsigned char pos);
-void drv_led_7segments_symbol ( uint8_t position, uint8_t symbol, uint8_t comma );
-int drv_led_blink (void);
-void drv_usr_init_scheduler_and_all_timers (void);
+void  drv_sys_init_gpio ( void );
+void  drv_usr_init_led_7segments ( void );
+void  drv_usr_init_led_8x8 ( void );
+void  drv_led_7segments_position (unsigned char pos);
+void  drv_led_7segments_symbol ( uint8_t position, uint8_t symbol, uint8_t comma );
+int   drv_led_blink (void);
+void  drv_usr_init_scheduler_and_all_timers (void);
 t_timer_stat delay_timer_count (uint8_t cfg);
 t_timer_stat delay_timer_leds5x8 (uint8_t cfg);
-char* IntToStr(int i, char b[]);
-char* FloatToLeds5x8(float ff, char b[]);
+char *IntToStr(int i, char b[]);
+char *FloatToLeds5x8(float ff, char b[]);
 char *ultostr(unsigned long value, char *ptr, int base);
 char *ftostr(float value, char *p_string, int base, uint8_t *p_comma);
+void  scan_keys ( t_io_values *p_io );
+t_ret_code algo_Snake ( t_io_values *p_io,  t_io_Snake *p_snake );
 //******************************************************************************
 
 
@@ -542,7 +570,42 @@ void drv_led_7segments_symbol ( uint8_t position, uint8_t symbol, uint8_t comma 
 
 
 //******************************************************************************
-void drv_led_8x8_pixel_set ( uint8_t x, uint8_t y, uint8_t t ) {
+void drv_led_8x8_clear ( uint8_t x, uint8_t y, uint8_t clear ) {
+	if (1==clear) {
+		/*GPIO_PORTC_AHB_DATA_R |=  (1<<4); // Cathod - X0
+		GPIO_PORTC_AHB_DATA_R |=  (1<<5); // Cathod - X1
+		GPIO_PORTC_AHB_DATA_R |=  (1<<6); // Cathod - X2
+		GPIO_PORTE_AHB_DATA_R |=  (1<<5); // Cathod - X3
+		GPIO_PORTE_AHB_DATA_R |=  (1<<0); // Cathod - X4
+		GPIO_PORTE_AHB_DATA_R |=  (1<<1); // Cathod - X5
+		GPIO_PORTE_AHB_DATA_R |=  (1<<2); // Cathod - X6
+		GPIO_PORTE_AHB_DATA_R |=  (1<<3); // Cathod - x7*/
+
+		GPIO_PORTM_DATA_R     &= ~(1<<4); // Cathod - y0
+		GPIO_PORTA_AHB_DATA_R &= ~(1<<6); // Cathod - y1
+		GPIO_PORTD_AHB_DATA_R &= ~(1<<3); // Cathod - y2
+		GPIO_PORTB_AHB_DATA_R &= ~(1<<2); // Cathod - y3
+		GPIO_PORTB_AHB_DATA_R &= ~(1<<3); // Cathod - y4
+		GPIO_PORTC_AHB_DATA_R &= ~(1<<7); // Cathod - y5
+		GPIO_PORTE_AHB_DATA_R &= ~(1<<4); // Cathod - y6
+		GPIO_PORTD_AHB_DATA_R &= ~(1<<7); // Cathod - X7
+		GPIO_PORTD_AHB_DATA_R &= ~(1<<1); // Cathod - y8
+		GPIO_PORTP_DATA_R     &= ~(1<<2); // Cathod - y9
+		GPIO_PORTD_AHB_DATA_R &= ~(1<<0); // Cathod - y10
+		GPIO_PORTM_DATA_R     &= ~(1<<3); // Cathod - y11
+		GPIO_PORTH_AHB_DATA_R &= ~(1<<2); // Cathod - y12
+		GPIO_PORTH_AHB_DATA_R &= ~(1<<3); // Cathod - y13
+		GPIO_PORTN_DATA_R     &= ~(1<<2); // Cathod - y14
+		GPIO_PORTN_DATA_R     &= ~(1<<3); // Cathod - X15
+	}
+}
+//******************************************************************************
+
+
+
+//******************************************************************************
+void drv_led_8x8_pixel_set ( uint8_t x, uint8_t y, uint8_t val ) {
+
 	GPIO_PORTC_AHB_DATA_R |=  (1<<4); // Cathod - X0
 	GPIO_PORTC_AHB_DATA_R |=  (1<<5); // Cathod - X1
 	GPIO_PORTC_AHB_DATA_R |=  (1<<6); // Cathod - X2
@@ -551,6 +614,7 @@ void drv_led_8x8_pixel_set ( uint8_t x, uint8_t y, uint8_t t ) {
 	GPIO_PORTE_AHB_DATA_R |=  (1<<1); // Cathod - X5
 	GPIO_PORTE_AHB_DATA_R |=  (1<<2); // Cathod - X6
 	GPIO_PORTE_AHB_DATA_R |=  (1<<3); // Cathod - x7
+
 	switch ( x ) {
 		case 0: GPIO_PORTC_AHB_DATA_R &= ~(1<<4); break; // Cathod - X0
 		case 1: GPIO_PORTC_AHB_DATA_R &= ~(1<<5); break; // Cathod - X1
@@ -560,36 +624,25 @@ void drv_led_8x8_pixel_set ( uint8_t x, uint8_t y, uint8_t t ) {
 		case 5: GPIO_PORTE_AHB_DATA_R &= ~(1<<1); break; // Cathod - X3
 		case 6: GPIO_PORTE_AHB_DATA_R &= ~(1<<2); break; // Cathod - X5
 		case 7:	GPIO_PORTE_AHB_DATA_R &= ~(1<<3); break; // Cathod - X6
-		/*default:
-			GPIO_PORTC_AHB_DATA_R |=  (1<<4); // Cathod - X0
-			GPIO_PORTC_AHB_DATA_R |=  (1<<6); // Cathod - X1
-			GPIO_PORTC_AHB_DATA_R |=  (1<<6); // Cathod - X2
-			GPIO_PORTE_AHB_DATA_R |=  (1<<5); // Cathod - X3
-			GPIO_PORTE_AHB_DATA_R |=  (1<<0); // Cathod - X4
-			GPIO_PORTE_AHB_DATA_R |=  (1<<1); // Cathod - X5
-			GPIO_PORTE_AHB_DATA_R |=  (1<<2); // Cathod - X6
-			GPIO_PORTE_AHB_DATA_R |=  (1<<3); // Cathod - x7
-		break;*/
 	}
 
 
-	/*case 0: */ GPIO_PORTM_DATA_R     &= ~(1<<4); //break; // Cathod - y0
-	/*case 1: */ GPIO_PORTA_AHB_DATA_R &= ~(1<<6); //break; // Cathod - y1
-	/*case 2: */ GPIO_PORTD_AHB_DATA_R &= ~(1<<3); //break; // Cathod - y2
-	/*case 3: */ GPIO_PORTB_AHB_DATA_R &= ~(1<<2); //break; // Cathod - y3
-	/*case 4: */ GPIO_PORTB_AHB_DATA_R &= ~(1<<3); //break; // Cathod - y4
-	/*case 5: */ GPIO_PORTC_AHB_DATA_R &= ~(1<<7); //break; // Cathod - y5
-	/*case 6: */ GPIO_PORTE_AHB_DATA_R &= ~(1<<4); //break; // Cathod - y6
-	/*case 7: */ GPIO_PORTD_AHB_DATA_R &= ~(1<<7); //break; // Cathod - X7
-	/* */
-	/*case 8: */ GPIO_PORTD_AHB_DATA_R &= ~(1<<1); //break; // Cathod - y8
-	/*case 9: */ GPIO_PORTP_DATA_R     &= ~(1<<2); //break; // Cathod - y9
-	/*case 10:*/ GPIO_PORTD_AHB_DATA_R &= ~(1<<0); //break; // Cathod - y10
-	/*case 11:*/ GPIO_PORTM_DATA_R     &= ~(1<<3); //break; // Cathod - y11
-	/*case 12:*/ GPIO_PORTH_AHB_DATA_R &= ~(1<<2); //break; // Cathod - y12
-	/*case 13:*/ GPIO_PORTH_AHB_DATA_R &= ~(1<<3); //break; // Cathod - y13
-	/*case 14:*/ GPIO_PORTN_DATA_R     &= ~(1<<2); //break; // Cathod - y14
-	/*case 15:*/ GPIO_PORTN_DATA_R     &= ~(1<<3); //break; // Cathod - X15
+	GPIO_PORTM_DATA_R     &= ~(1<<4); // Cathod - y0
+	GPIO_PORTA_AHB_DATA_R &= ~(1<<6); // Cathod - y1
+	GPIO_PORTD_AHB_DATA_R &= ~(1<<3); // Cathod - y2
+	GPIO_PORTB_AHB_DATA_R &= ~(1<<2); // Cathod - y3
+	GPIO_PORTB_AHB_DATA_R &= ~(1<<3); // Cathod - y4
+	GPIO_PORTC_AHB_DATA_R &= ~(1<<7); // Cathod - y5
+	GPIO_PORTE_AHB_DATA_R &= ~(1<<4); // Cathod - y6
+	GPIO_PORTD_AHB_DATA_R &= ~(1<<7); // Cathod - X7
+	GPIO_PORTD_AHB_DATA_R &= ~(1<<1); // Cathod - y8
+	GPIO_PORTP_DATA_R     &= ~(1<<2); // Cathod - y9
+	GPIO_PORTD_AHB_DATA_R &= ~(1<<0); // Cathod - y10
+	GPIO_PORTM_DATA_R     &= ~(1<<3); // Cathod - y11
+	GPIO_PORTH_AHB_DATA_R &= ~(1<<2); // Cathod - y12
+	GPIO_PORTH_AHB_DATA_R &= ~(1<<3); // Cathod - y13
+	GPIO_PORTN_DATA_R     &= ~(1<<2); // Cathod - y14
+	GPIO_PORTN_DATA_R     &= ~(1<<3); // Cathod - X15
 
 	switch ( y ) {
 		case 0x00: GPIO_PORTM_DATA_R     |=  (1<<4); break; // Cathod - y0
@@ -1089,6 +1142,7 @@ void scan_keys ( t_io_values *p_io )
 		if ( p_io->in<10000 ) p_io->in +=  1;
 
 		if ( ++p_io->x>7 ) p_io->x=0;
+		srand ( p_io->x *100 );
 	}
 	if ( (GPIO_PORTJ_AHB_DATA_R & 0x03) == BTN_PCS_1 ) {
 		if ( p_io->in>0 )
@@ -1099,24 +1153,15 @@ void scan_keys ( t_io_values *p_io )
 		if ( p_io->in<10000 ) p_io->in -=  1;
 
 		if ( ++p_io->y>15 ) p_io->y=0;
+		srand ( p_io->y *100 );
 	}
 }
 //******************************************************************************
 
 
-typedef enum {
-	S_START_RANDOM = 0,
-	S_BEGIN,
-	S_MOVE,
-	S_EAT_YES,
-	S_EAT_NO,
-	S_RANDOM,
-	S_CHANGE_DIRECTION,
-	S_BORDER_END
-} algo_step;
 
 //******************************************************************************
-void algo_Snake ( t_io_values *p_io,  t_io_Snake *p_snake ) {
+t_ret_code algo_Snake ( t_io_values *p_io,  t_io_Snake *p_snake ) {
 /*
  * ) Set startup values (Random?)
  * )     <--------------------------------------------------------------------.
@@ -1129,13 +1174,109 @@ void algo_Snake ( t_io_values *p_io,  t_io_Snake *p_snake ) {
  * ) ...If border is limited ->End
  * )
  */
+	t_ret_code  rc = RC_FAILED;
 
+	if ( p_io == NULL ){
+		rc=RC_PTR_FAIL;
+		return rc;
+	}
+
+	if ( p_snake == NULL ){
+		rc=RC_PTR_FAIL;
+		return rc;
+	}
+
+	rc = RC_OK;
+
+	//static t_algo_step  algo_step;
+	uint8_t      xx, yy;
+	uint32_t     rnd, rnd_tmp;
+
+	switch ( p_snake->algo_step )
+	{
+		case S_INIT:
+			p_snake->body = p_snake->ptr_field;
+			p_snake->ptr_field     = &a_field[0][0];
+			p_snake->ptr_field_eat = &a_field_eat[0][0];
+			p_snake->curr_x        = 0;
+			p_snake->curr_y        = 0;
+
+			// Initiate seek random number
+			srand ( 100 );
+
+			// Clean field
+			for ( xx=0; xx<8; xx++ ) {
+				for ( yy=0; yy<16; yy++ ) { a_field_eat[xx][yy]=0; }
+			}
+
+			p_snake->algo_step = S_START_RANDOM;
+		break;
+
+		case S_START_RANDOM:
+			// Fill field
+			for ( xx=0; xx<8; xx++ ) {
+				for ( yy=0; yy<16; yy++ ) {
+					rnd = (int)rand(); // get random number
+					p_snake->rnd = rnd;
+					rnd_tmp = rnd % 20;
+					a_field_eat [xx][yy] = ( rnd_tmp < 8 ) ? 1 : 0;
+				}
+			}
+
+			p_snake->algo_step = S_BEGIN;
+		break;
+
+		case S_BEGIN:
+			//drv_led_8x8_clear( 0, 0, 1 );
+			for ( xx=0; xx<8; xx++ ) {
+				for ( yy=0; yy<16; yy++ ) {
+					if (1==a_field_eat [xx][yy])
+					if ( _TIMER_READY == delay_timer_count('?') ) {
+						//io.in += 0.0001;
+						delay_timer_count(0);
+						drv_led_8x8_pixel_set(xx, yy, 0); // display info
+					}
+				}
+			}
+
+			p_snake->algo_step = S_START_RANDOM;//S_BEGIN;
+			//p_snake->algo_step = S_MOVE;
+		break;
+
+		case S_MOVE:
+			p_snake->algo_step = S_EAT_YES;
+		break;
+
+		case S_EAT_YES:
+			p_snake->algo_step = S_EAT_NO;
+		break;
+
+		case S_EAT_NO:
+			p_snake->algo_step = S_RANDOM;
+		break;
+
+		case S_RANDOM:
+			p_snake->algo_step = S_CHANGE_DIRECTION;
+		break;
+
+		case S_CHANGE_DIRECTION:
+			p_snake->algo_step = S_BORDER_END;
+		break;
+
+		case S_BORDER_END:
+			p_snake->algo_step = S_BORDER_END;
+		break;
+
+		default :
+			p_snake->algo_step = S_BORDER_END;
+		break;
+	}
+
+	return rc;
 }
 //******************************************************************************
 
 
-char data[5] ={ 1,  3,  5,  7,  9 };
-char datas[5]={'1','3','5','7','9'};
 
 //******************************************************************************
 // Blinks on the leds and indicator.
@@ -1143,11 +1284,10 @@ char datas[5]={'1','3','5','7','9'};
 int main (void) {
     volatile uint32_t   pos;
     volatile uint32_t   cnt=0;
-    char       *tmp;
-	char       *p_str;
+	char       *p_str=0;
     uint8_t     comma;
 	t_io_values io;
-	t_io_Snake  snake;
+	t_io_Snake  snake = {.algo_step=S_INIT};
 
     drv_sys_init_gpio ();
     drv_usr_init_led_7segments ();
@@ -1158,19 +1298,20 @@ int main (void) {
     io.in = 0.0001; // Set to default value
 
 	while(1) {  // Loop forever.
-		if ( _TIMER_READY == delay_timer_count('?') ) {
-			//io.in += 0.0001;
-			delay_timer_count(0);
-		}
+		//if ( _TIMER_READY == delay_timer_count('?') ) {
+		//	//io.in += 0.0001;
+		//	delay_timer_count(0);
+		//}
+
 		if ( _TIMER_READY == delay_timer_leds5x8('?') ) {
 			if ( pos < 5 ) {
 				p_str = ftostr ( io.in, data, 10, &comma ); // value, *ptr, base, *comma_possition
 				drv_led_7segments_symbol ( pos, data[pos], comma ); // display info
 				drv_led_7segments_position ( pos ); // dinamic switching
-				drv_led_8x8_pixel_set ( io.x, io.y, 0 ); // display info
+				//drv_led_8x8_pixel_set ( io.x, io.y, 0 ); // display info
+				if ( RC_OK != algo_Snake (&io, &snake) ) { error_forever_loop; }
 				pos++;
 				cnt++;
-				algo_Snake ( &io, &snake );
     		} else {
 				pos = 0;
     		}
