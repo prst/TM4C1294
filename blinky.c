@@ -134,7 +134,7 @@ t_Scheduler timer_leds1on, timer_leds1off;
 t_Scheduler timer_leds2on, timer_leds2off;
 t_Scheduler timer_leds3on, timer_leds3off;
 t_Scheduler timer_leds4on, timer_leds4off;
-t_Scheduler timer_count;
+t_Scheduler timer_leds8x8;
 t_Scheduler timer_keys_usr1_2;
 
 uint32_t  dly1 = 0;
@@ -145,6 +145,7 @@ uint32_t  leds_position;
 
 uint8_t   a_field [8][16];
 uint8_t   a_field_eat [8][16];
+uint8_t   a_field_eat_16b [16];
 uint8_t   data [5] = { 1,  3,  5,  7,  9 };
 uint8_t   datas[5] = {'1','3','5','7','9'};
 
@@ -669,6 +670,99 @@ void drv_led_8x8_pixel_set ( uint8_t x, uint8_t y, uint8_t val ) {
 
 
 //******************************************************************************
+void drv_led_8x8_show_byte ( uint8_t Byte, uint8_t Line ) {
+	/*Catod: X0*/ if (Byte&0x01) GPIO_PORTC_AHB_DATA_R &=~(1<<4); else GPIO_PORTC_AHB_DATA_R|=(1<<4);
+	/*Catod: X1*/ if (Byte&0x02) GPIO_PORTC_AHB_DATA_R &=~(1<<5); else GPIO_PORTC_AHB_DATA_R|=(1<<5);
+	/*Catod: X2*/ if (Byte&0x04) GPIO_PORTC_AHB_DATA_R &=~(1<<6); else GPIO_PORTC_AHB_DATA_R|=(1<<6);
+	/*Catod: X3*/ if (Byte&0x08) GPIO_PORTE_AHB_DATA_R &=~(1<<5); else GPIO_PORTE_AHB_DATA_R|=(1<<5);
+	/*Catod: X4*/ if (Byte&0x10) GPIO_PORTE_AHB_DATA_R &=~(1<<0); else GPIO_PORTE_AHB_DATA_R|=(1<<0);
+	/*Catod: X5*/ if (Byte&0x20) GPIO_PORTE_AHB_DATA_R &=~(1<<1); else GPIO_PORTE_AHB_DATA_R|=(1<<1);
+	/*Catod: X6*/ if (Byte&0x40) GPIO_PORTE_AHB_DATA_R &=~(1<<2); else GPIO_PORTE_AHB_DATA_R|=(1<<2);
+	/*Catod: X7*/ if (Byte&0x80) GPIO_PORTE_AHB_DATA_R &=~(1<<3); else GPIO_PORTE_AHB_DATA_R|=(1<<3);
+
+	/*Anod: y0*/  if((15-Line)==0)  GPIO_PORTM_DATA_R    |=(1<<4); else GPIO_PORTM_DATA_R    &=~(1<<4);
+	/*Anod: y1*/  if((15-Line)==1)  GPIO_PORTA_AHB_DATA_R|=(1<<6); else GPIO_PORTA_AHB_DATA_R&=~(1<<6);
+	/*Anod: y2*/  if((15-Line)==2)  GPIO_PORTD_AHB_DATA_R|=(1<<3); else GPIO_PORTD_AHB_DATA_R&=~(1<<3);
+	/*Anod: y3*/  if((15-Line)==3)  GPIO_PORTB_AHB_DATA_R|=(1<<2); else GPIO_PORTB_AHB_DATA_R&=~(1<<2);
+	/*Anod: y4*/  if((15-Line)==4)  GPIO_PORTB_AHB_DATA_R|=(1<<3); else GPIO_PORTB_AHB_DATA_R&=~(1<<3);
+	/*Anod: y5*/  if((15-Line)==5)  GPIO_PORTC_AHB_DATA_R|=(1<<7); else GPIO_PORTC_AHB_DATA_R&=~(1<<7);
+	/*Anod: y6*/  if((15-Line)==6)  GPIO_PORTE_AHB_DATA_R|=(1<<4); else GPIO_PORTE_AHB_DATA_R&=~(1<<4);
+	/*Anod: y7*/  if((15-Line)==7)  GPIO_PORTD_AHB_DATA_R|=(1<<7); else GPIO_PORTD_AHB_DATA_R&=~(1<<7);
+	/*Anod: y8*/  if((15-Line)==8)  GPIO_PORTD_AHB_DATA_R|=(1<<1); else GPIO_PORTD_AHB_DATA_R&=~(1<<1);
+	/*Anod: y9*/  if((15-Line)==9)  GPIO_PORTP_DATA_R    |=(1<<2); else GPIO_PORTP_DATA_R    &=~(1<<2);
+	/*Anod: y10*/ if((15-Line)==10) GPIO_PORTD_AHB_DATA_R|=(1<<0); else GPIO_PORTD_AHB_DATA_R&=~(1<<0);
+	/*Anod: y11*/ if((15-Line)==11) GPIO_PORTM_DATA_R    |=(1<<3); else GPIO_PORTM_DATA_R    &=~(1<<3);
+	/*Anod: y12*/ if((15-Line)==12) GPIO_PORTH_AHB_DATA_R|=(1<<2); else GPIO_PORTH_AHB_DATA_R&=~(1<<2);
+	/*Anod: y13*/ if((15-Line)==13) GPIO_PORTH_AHB_DATA_R|=(1<<3); else GPIO_PORTH_AHB_DATA_R&=~(1<<3);
+	/*Anod: y14*/ if((15-Line)==14) GPIO_PORTN_DATA_R    |=(1<<2); else GPIO_PORTN_DATA_R    &=~(1<<2);
+	/*Anod: y15*/ if((15-Line)==15) GPIO_PORTN_DATA_R    |=(1<<3); else GPIO_PORTN_DATA_R    &=~(1<<3);
+
+	/* Force erase last row */ GPIO_PORTM_DATA_R &= ~(1<<4); // Anod - y0
+
+	/* 	// Pre-clean
+	GPIO_PORTM_DATA_R     &= ~(1<<4); // Anod - y0
+	GPIO_PORTA_AHB_DATA_R &= ~(1<<6); // Anod - y1
+	GPIO_PORTD_AHB_DATA_R &= ~(1<<3); // Anod - y2
+	GPIO_PORTB_AHB_DATA_R &= ~(1<<2); // Anod - y3
+	GPIO_PORTB_AHB_DATA_R &= ~(1<<3); // Anod - y4
+	GPIO_PORTC_AHB_DATA_R &= ~(1<<7); // Anod - y5
+	GPIO_PORTE_AHB_DATA_R &= ~(1<<4); // Anod - y6
+	GPIO_PORTD_AHB_DATA_R &= ~(1<<7); // Anod - X7
+	GPIO_PORTD_AHB_DATA_R &= ~(1<<1); // Anod - y8
+	GPIO_PORTP_DATA_R     &= ~(1<<2); // Anod - y9
+	GPIO_PORTD_AHB_DATA_R &= ~(1<<0); // Anod - y10
+	GPIO_PORTM_DATA_R     &= ~(1<<3); // Anod - y11
+	GPIO_PORTH_AHB_DATA_R &= ~(1<<2); // Anod - y12
+	GPIO_PORTH_AHB_DATA_R &= ~(1<<3); // Anod - y13
+	GPIO_PORTN_DATA_R     &= ~(1<<2); // Anod - y14
+	GPIO_PORTN_DATA_R     &= ~(1<<3); // Anod - X15
+
+	switch ( 15-Line ) {
+		case 0:  GPIO_PORTM_DATA_R     |=  (1<<4); break; // Anod - y0
+		case 1:  GPIO_PORTA_AHB_DATA_R |=  (1<<6); break; // Anod - y1
+		case 2:  GPIO_PORTD_AHB_DATA_R |=  (1<<3); break; // Anod - y2
+		case 3:  GPIO_PORTB_AHB_DATA_R |=  (1<<2); break; // Anod - y3
+		case 4:  GPIO_PORTB_AHB_DATA_R |=  (1<<3); break; // Anod - y4
+		case 5:  GPIO_PORTC_AHB_DATA_R |=  (1<<7); break; // Anod - y5
+		case 6:  GPIO_PORTE_AHB_DATA_R |=  (1<<4); break; // Anod - y6
+		case 7:  GPIO_PORTD_AHB_DATA_R |=  (1<<7); break; // Anod - X7
+		case 8:  GPIO_PORTD_AHB_DATA_R |=  (1<<1); break; // Anod - y8
+		case 9:  GPIO_PORTP_DATA_R     |=  (1<<2); break; // Anod - y9
+		case 10: GPIO_PORTD_AHB_DATA_R |=  (1<<0); break; // Anod - y10
+		case 11: GPIO_PORTM_DATA_R     |=  (1<<3); break; // Anod - y11
+		case 12: GPIO_PORTH_AHB_DATA_R |=  (1<<2); break; // Anod - y12
+		case 13: GPIO_PORTH_AHB_DATA_R |=  (1<<3); break; // Anod - y13
+		case 14: GPIO_PORTN_DATA_R     |=  (1<<2); break; // Anod - y14
+		case 15: GPIO_PORTN_DATA_R     |=  (1<<3); break; // Anod - X15
+	}
+
+	// Pre-clean
+	GPIO_PORTC_AHB_DATA_R |=  (1<<4); // Catod - X0
+	GPIO_PORTC_AHB_DATA_R |=  (1<<5); // Catod - X1
+	GPIO_PORTC_AHB_DATA_R |=  (1<<6); // Catod - X2
+	GPIO_PORTE_AHB_DATA_R |=  (1<<5); // Catod - X3
+	GPIO_PORTE_AHB_DATA_R |=  (1<<0); // Catod - X4
+	GPIO_PORTE_AHB_DATA_R |=  (1<<1); // Catod - X5
+	GPIO_PORTE_AHB_DATA_R |=  (1<<2); // Catod - X6
+	GPIO_PORTE_AHB_DATA_R |=  (1<<3); // Catod - x7
+
+	for ( ll=0; ll<8; ll++ )
+	switch ( Byte & (1<<ll)  ) {
+		case 0x01<<0: GPIO_PORTC_AHB_DATA_R &= ~(1<<4); break; // Catod - X0
+		case 0x01<<1: GPIO_PORTC_AHB_DATA_R &= ~(1<<5); break; // Catod - X1
+		case 0x01<<2: GPIO_PORTC_AHB_DATA_R &= ~(1<<6); break; // Catod - X2
+		case 0x01<<3: GPIO_PORTE_AHB_DATA_R &= ~(1<<5); break; // Catod - X3
+		case 0x01<<4: GPIO_PORTE_AHB_DATA_R &= ~(1<<0); break; // Catod - X3
+		case 0x01<<5: GPIO_PORTE_AHB_DATA_R &= ~(1<<1); break; // Catod - X3
+		case 0x01<<6: GPIO_PORTE_AHB_DATA_R &= ~(1<<2); break; // Catod - X5
+		case 0x01<<7: GPIO_PORTE_AHB_DATA_R &= ~(1<<3); break; // Catod - X6
+	} */
+}
+//******************************************************************************
+
+
+
+//******************************************************************************
 // LEDS[0,1,2,3]=[PN1,PN0,PF4,PF0]
 //******************************************************************************
 int drv_led_blink (void) {
@@ -763,8 +857,18 @@ int drv_led_blink (void) {
 
 //******************************************************************************
 void drv_usr_init_scheduler_and_all_timers (void) {
-    timer_leds1on.timer_is_set = 1;
-    timer_leds1on.set_timer_limit  = 50000; // set period for led as time OFF
+    timer_leds5x8.timer_is_set = 1;
+    timer_leds5x8.set_timer_limit  = 50; // set period for 5x8 7-segment display
+
+    timer_leds8x8.timer_is_set = 1;
+    timer_leds8x8.set_timer_limit  = 3; // set period for timer counter
+
+    timer_keys_usr1_2.timer_is_set = 1;
+    timer_keys_usr1_2.ready_to_use = 1;
+    timer_keys_usr1_2.set_timer_limit  = 2000; // set period for 8x8 leds display
+
+	timer_leds1on.timer_is_set = 1;
+    timer_leds1on.set_timer_limit  = 5000; // set period for led as time OFF
     timer_leds1on.ready_to_use = 1;
     timer_leds1on.common_rule = &leds_position;
     timer_leds1off.timer_is_set = 1;
@@ -773,7 +877,7 @@ void drv_usr_init_scheduler_and_all_timers (void) {
     timer_leds1off.common_rule = &leds_position;
 
     timer_leds2on.timer_is_set = 1;
-    timer_leds2on.set_timer_limit  = 50000; // set period for led as time OFF
+    timer_leds2on.set_timer_limit  = 5000; // set period for led as time OFF
     timer_leds2on.ready_to_use = 1;
     timer_leds2on.common_rule = &leds_position;
     timer_leds2off.timer_is_set = 1;
@@ -782,7 +886,7 @@ void drv_usr_init_scheduler_and_all_timers (void) {
     timer_leds2off.common_rule = &leds_position;
 
     timer_leds3on.timer_is_set = 1;
-    timer_leds3on.set_timer_limit  = 50000; // set period for led as time OFF
+    timer_leds3on.set_timer_limit  = 5000; // set period for led as time OFF
     timer_leds3on.ready_to_use = 1;
     timer_leds3on.common_rule = &leds_position;
     timer_leds3off.timer_is_set = 1;
@@ -791,7 +895,7 @@ void drv_usr_init_scheduler_and_all_timers (void) {
     timer_leds3off.common_rule = &leds_position;
 
     timer_leds4on.timer_is_set = 1;
-    timer_leds4on.set_timer_limit  = 50000; // set period for led as time OFF
+    timer_leds4on.set_timer_limit  = 5000; // set period for led as time OFF
     timer_leds4on.ready_to_use = 1;
     timer_leds4on.common_rule = &leds_position;
     timer_leds4off.timer_is_set = 1;
@@ -799,15 +903,6 @@ void drv_usr_init_scheduler_and_all_timers (void) {
     timer_leds4off.ready_to_use = 1;
     timer_leds4off.common_rule = &leds_position;
 
-    timer_leds5x8.timer_is_set = 1;
-    timer_leds5x8.set_timer_limit  = 200; // set period for 5x8 7-segment display
-
-    timer_count.timer_is_set = 1;
-    timer_count.set_timer_limit  = 100; // set period for timer counter
-
-    timer_keys_usr1_2.timer_is_set = 1;
-    timer_keys_usr1_2.ready_to_use = 1;
-    timer_keys_usr1_2.set_timer_limit  = 5000; // set period for 8x8 leds display
 }
 //******************************************************************************
 
@@ -817,13 +912,14 @@ void drv_usr_init_scheduler_and_all_timers (void) {
 t_timer_stat delay_timer_count (uint8_t cfg) {
 t_timer_stat err_code = _TIMER_NOT_READY;
 	if (cfg==0) {
-		timer_count.cur_timer_val=0;
+		timer_leds8x8.cur_timer_val=0;
 	}
 
 	if (cfg=='?') {
-		if ( timer_count.timer_is_set ) {
-			timer_count.cur_timer_val++;
-			if ( timer_count.cur_timer_val >= timer_count.set_timer_limit ) {
+		if ( timer_leds8x8.timer_is_set ) {
+			timer_leds8x8.cur_timer_val++;
+			if ( timer_leds8x8.cur_timer_val >= timer_leds8x8.set_timer_limit ) {
+				 timer_leds8x8.cur_timer_val=0;
 				err_code = _TIMER_READY;
 			} else {
 				err_code = _TIMER_NOT_READY;
@@ -850,6 +946,7 @@ t_timer_stat err_code = _TIMER_NOT_READY;
 		if ( timer_keys_usr1_2.timer_is_set ) {
 			timer_keys_usr1_2.cur_timer_val++;
 			if ( timer_keys_usr1_2.cur_timer_val >= timer_keys_usr1_2.set_timer_limit ) {
+				 timer_keys_usr1_2.cur_timer_val=0;
 				err_code = _TIMER_READY;
 			} else {
 				err_code = _TIMER_NOT_READY;
@@ -875,7 +972,9 @@ t_timer_stat err_code = _TIMER_NOT_READY;
 
 	if (cfg=='?') {
 		if ( timer_leds5x8.timer_is_set ) {
-			if ( ++timer_leds5x8.cur_timer_val >= timer_leds5x8.set_timer_limit ) {
+			timer_leds5x8.cur_timer_val++;
+			if ( timer_leds5x8.cur_timer_val >= timer_leds5x8.set_timer_limit ) {
+				 timer_leds5x8.cur_timer_val=0;
 				err_code = _TIMER_READY;
 			} else {
 				err_code = _TIMER_NOT_READY;
@@ -1176,12 +1275,7 @@ t_ret_code algo_Snake ( t_io_values *p_io,  t_io_Snake *p_snake ) {
  */
 	t_ret_code  rc = RC_FAILED;
 
-	if ( p_io == NULL ){
-		rc=RC_PTR_FAIL;
-		return rc;
-	}
-
-	if ( p_snake == NULL ){
+	if ( p_io == NULL || p_snake == NULL ){
 		rc=RC_PTR_FAIL;
 		return rc;
 	}
@@ -1201,9 +1295,6 @@ t_ret_code algo_Snake ( t_io_values *p_io,  t_io_Snake *p_snake ) {
 			p_snake->curr_x        = 0;
 			p_snake->curr_y        = 0;
 
-			// Initiate seek random number
-			srand ( 100 );
-
 			// Clean field
 			for ( xx=0; xx<8; xx++ ) {
 				for ( yy=0; yy<16; yy++ ) { a_field_eat[xx][yy]=0; }
@@ -1213,13 +1304,22 @@ t_ret_code algo_Snake ( t_io_values *p_io,  t_io_Snake *p_snake ) {
 		break;
 
 		case S_START_RANDOM:
+			// Initiate seek random number
+			//srand ( 255 );
+			srand ( p_io->x );
+
 			// Fill field
-			for ( xx=0; xx<8; xx++ ) {
-				for ( yy=0; yy<16; yy++ ) {
-					rnd = (int)rand(); // get random number
+			//for ( xx=0; xx<8; xx++ )
+			{
+				for ( yy=0; yy<16; yy++ )
+				{
+					rnd = (uint8_t)rand(); // get random number
+					if (rnd&0x01) rnd&=0x69; else rnd&=0x96;
+
 					p_snake->rnd = rnd;
-					rnd_tmp = rnd % 20;
-					a_field_eat [xx][yy] = ( rnd_tmp < 8 ) ? 1 : 0;
+					rnd_tmp = rnd;
+					//a_field_eat [xx][yy] = ( rnd_tmp < 8 ) ? 1 : 0;
+					a_field_eat_16b[yy] = rnd_tmp;
 				}
 			}
 
@@ -1228,13 +1328,18 @@ t_ret_code algo_Snake ( t_io_values *p_io,  t_io_Snake *p_snake ) {
 
 		case S_BEGIN:
 			//drv_led_8x8_clear( 0, 0, 1 );
-			for ( xx=0; xx<8; xx++ ) {
-				for ( yy=0; yy<16; yy++ ) {
-					if (1==a_field_eat [xx][yy])
-					if ( _TIMER_READY == delay_timer_count('?') ) {
+			//for ( xx=0; xx<8; xx++ )
+			{
+				if ( _TIMER_READY == delay_timer_count('?') ) {
+					//delay_timer_count(0);
+
+					for ( yy=0; yy<16; yy/*++*/ )
+					{
+					//if (1==a_field_eat [xx][yy])
 						//io.in += 0.0001;
-						delay_timer_count(0);
-						drv_led_8x8_pixel_set(xx, yy, 0); // display info
+						//drv_led_8x8_pixel_set(xx, yy, 0); // display info
+						drv_led_8x8_show_byte( a_field_eat_16b[yy], yy);
+						yy++;
 					}
 				}
 			}
@@ -1297,32 +1402,34 @@ int main (void) {
     leds_position = 1;
     io.in = 0.0001; // Set to default value
 
-	while(1) {  // Loop forever.
+	while(1)  // Loop forever.
+	{
+		drv_led_blink (); // timer_leds4on.common_rule
+
 		//if ( _TIMER_READY == delay_timer_count('?') ) {
+		//	//delay_timer_count(0);
 		//	//io.in += 0.0001;
-		//	delay_timer_count(0);
 		//}
 
 		if ( _TIMER_READY == delay_timer_leds5x8('?') ) {
+			//delay_timer_leds5x8(0);
 			if ( pos < 5 ) {
 				p_str = ftostr ( io.in, data, 10, &comma ); // value, *ptr, base, *comma_possition
 				drv_led_7segments_symbol ( pos, data[pos], comma ); // display info
 				drv_led_7segments_position ( pos ); // dinamic switching
 				//drv_led_8x8_pixel_set ( io.x, io.y, 0 ); // display info
-				if ( RC_OK != algo_Snake (&io, &snake) ) { error_forever_loop; }
 				pos++;
 				cnt++;
-    		} else {
-				pos = 0;
     		}
-			delay_timer_leds5x8(0);
+			if (pos>=5) pos=0;
     	}
-		drv_led_blink ();
 
 		if (  _TIMER_READY == delay_timer_keys_usr1_2('?') ) {
 			scan_keys ( &io );
-			delay_timer_keys_usr1_2(0);
+			//delay_timer_keys_usr1_2(0);
 		}
-    }
+
+		if ( RC_OK != algo_Snake (&io, &snake) ) { error_forever_loop; }
+	}
 }
 //******************************************************************************
