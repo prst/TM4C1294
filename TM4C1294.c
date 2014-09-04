@@ -80,12 +80,37 @@ typedef struct {
 	uint32_t  *common_rule;
 } t_Scheduler;
 
+/* Discriptor of Keys */
+typedef struct {
+	uint8_t  k0 :1;
+	uint8_t  k1 :1;
+	uint8_t  k2 :1;
+	uint8_t  k3 :1;
+	uint8_t  k4 :1;
+	uint8_t  k5 :1;
+	uint8_t  reserv :2;
+} t_io_keys;
+
 /* Discriptor of I/O */
 typedef struct {
-	float    in;
-	uint8_t  x;
-	uint8_t  y;
+	float      in;
+	uint8_t    x;
+	uint8_t    y;
+	t_io_keys  keys;
 } t_io_values;
+
+/* Discriptor of Keys */
+typedef struct {
+	uint16_t  key0         :1;
+	uint16_t  key1         :1;
+	uint16_t  key2         :1;
+	uint16_t  key3         :1;
+	uint16_t  key4         :1;
+	uint16_t  key5         :1;
+	uint16_t  key_pressed  :1;
+	uint16_t  status       :3;
+	uint16_t  reserved     :6;
+} t_sys_values;
 
 /* Discriptor of zmeyka */
 typedef struct {
@@ -135,7 +160,8 @@ t_Scheduler timer_leds2on, timer_leds2off;
 t_Scheduler timer_leds3on, timer_leds3off;
 t_Scheduler timer_leds4on, timer_leds4off;
 t_Scheduler timer_leds8x8;
-t_Scheduler timer_keys_usr1_2;
+t_Scheduler timer_keys;
+t_Scheduler timer_fft;
 
 uint32_t  dly1 = 0;
 uint32_t  dly2 = 0;
@@ -149,39 +175,48 @@ uint8_t   a_field_eat_16b [16];
 uint8_t   data [5] = { 1,  3,  5,  7,  9 };
 uint8_t   datas[5] = {'1','3','5','7','9'};
 
+
+#define  FFT_NUM  (32)
+extern double  buf_in[FFT_NUM];
+extern double  buf_out[2*FFT_NUM];
+
+
 //******************************************************************************
 
 
 
 //******************************************************************************
-void  drv_sys_init_gpio ( void );
+void  drv_sys_init_gpio_output_input ( void );
 void  drv_usr_init_led_7segments ( void );
 void  drv_usr_init_led_8x8 ( void );
+void  drv_led_7segments_clean ( void );
 void  drv_led_7segments_position (unsigned char pos);
 void  drv_led_7segments_symbol ( uint8_t position, uint8_t symbol, uint8_t comma );
 int   drv_led_blink (void);
 void  drv_usr_init_scheduler_and_all_timers (void);
-t_timer_stat delay_timer_count (uint8_t cfg);
+t_timer_stat delay_timer_leds8x8 (uint8_t cfg);
+t_timer_stat delay_timer_keys (uint8_t cfg);
 t_timer_stat delay_timer_leds5x8 (uint8_t cfg);
+t_timer_stat delay_timer_fft (uint8_t cfg);
 char *IntToStr(int i, char b[]);
 char *FloatToLeds5x8(float ff, char b[]);
 char *ultostr(unsigned long value, char *ptr, int base);
-char *ftostr(float value, char *p_string, int base, uint8_t *p_comma);
-void  scan_keys ( t_io_values *p_io );
+char *ftostr(float value, uint8_t *p_string, int base, uint8_t *p_comma);
+t_ret_code keys_scan ( t_io_values *p_io );
+t_ret_code keys_analyze ( t_io_values *p_io, t_sys_values *p_sys );
 t_ret_code algo_Snake ( t_io_values *p_io,  t_io_Snake *p_snake );
 //******************************************************************************
 
 
 
 //******************************************************************************
-// void drv_init_gpio ( void )
+// void drv_init_gpio_output ( void )
 // Initialisation for GPIO, basic configuration and default startup settings.
 //******************************************************************************
-void drv_sys_init_gpio ( void ) {
+void drv_sys_init_gpio_output_input ( void ) {
     volatile uint32_t ui32Loop;
 
-/*
-Datasheet @ page 757 @
+/*  Datasheet @ page 757 @
 Texas Instruments-Production Data @ Tiva TM4C1294NCPDT Microcontroller
 Table 10-7. GPIO Register Map
 
@@ -236,9 +271,11 @@ Offset 	Name Type 	Reset 					Description page
 		SYSCTL_RCGCGPIO_R13 | //SYSCTL_RCGCGPIO_R13=GPIO Port P Run Mode Clock
     	SYSCTL_RCGCGPIO_R12 | //SYSCTL_RCGCGPIO_R12=GPIO Port N Run Mode Clock
 		SYSCTL_RCGCGPIO_R11 | //SYSCTL_RCGCGPIO_R11=GPIO Port M Run Mode Clock
+    	SYSCTL_RCGCGPIO_R10 | //SYSCTL_RCGCGPIO_R10=GPIO Port L Run Mode Clock
     	SYSCTL_RCGCGPIO_R9  | //SYSCTL_RCGCGPIO_R9= GPIO Port K Run Mode Clock
     	SYSCTL_RCGCGPIO_R8  | //SYSCTL_RCGCGPIO_R8= GPIO Port J Run Mode Clock
     	SYSCTL_RCGCGPIO_R7  | //SYSCTL_RCGCGPIO_R7= GPIO Port H Run Mode Clock
+    	SYSCTL_RCGCGPIO_R6  | //SYSCTL_RCGCGPIO_R6= GPIO Port G Run Mode Clock
     	SYSCTL_RCGCGPIO_R5  | //SYSCTL_RCGCGPIO_R5= GPIO Port F Run Mode Clock
     	SYSCTL_RCGCGPIO_R4  | //SYSCTL_RCGCGPIO_R4= GPIO Port E Run Mode Clock
     	SYSCTL_RCGCGPIO_R3  | //SYSCTL_RCGCGPIO_R3= GPIO Port D Run Mode Clock
@@ -249,7 +286,9 @@ Offset 	Name Type 	Reset 					Description page
     // Do a dummy read to insert a few cycles after enabling the peripheral.
     ui32Loop = SYSCTL_RCGCGPIO_R;
 
-    // ..................................
+    //--------------------------------------------------------------------------
+    // OUTPUT
+    //--------------------------------------------------------------------------
     GPIO_PORTN_DIR_R     = 0;
     GPIO_PORTN_DEN_R     = 0;
     GPIO_PORTF_AHB_DIR_R = 0;
@@ -275,17 +314,140 @@ Offset 	Name Type 	Reset 					Description page
     GPIO_PORTF_AHB_DIR_R |= 0x01;
     GPIO_PORTF_AHB_DEN_R |= 0x01;
 
-
-    // Enable the GPIO pin for the SW0 (PJ0).  Set the direction as input, and
-    // enable the GPIO pin for digital function.
-    GPIO_PORTJ_AHB_DIR_R |= 0x00;
+    //--------------------------------------------------------------------------
+    // INPUT
+    //--------------------------------------------------------------------------
+    // Enable the GPIO pin for the SW0 (PJ0).
+    // Set the direction as input, and enable the GPIO pin for digital function.
+    GPIO_PORTJ_AHB_DIR_R &=~0x03;
     GPIO_PORTJ_AHB_DEN_R |= 0x03; // SW0 and SW1: 0x01 and 0x02
     GPIO_PORTJ_AHB_PUR_R |= 0x03; // Pull-Up Resistor
-    GPIO_PORTJ_AHB_PP_R = 1;
-    GPIO_PORTJ_AHB_PC_R = 3;
+    GPIO_PORTJ_AHB_PP_R   = 1;
+    GPIO_PORTJ_AHB_PC_R   = 3;
 
+    // Set the direction as input, and enable the GPIO pin for digital function.
+    // Inputs on Port F
+    GPIO_PORTF_AHB_DIR_R &=~(1<<3|1<<2|1<<1);
+    GPIO_PORTF_AHB_DEN_R |= (1<<3|1<<2|1<<1); //
+    GPIO_PORTF_AHB_PUR_R |= (1<<3|1<<2|1<<1); // Pull-Up Resistor
+    GPIO_PORTF_AHB_PP_R   = 1;
+    GPIO_PORTF_AHB_PC_R   = 3;
+
+    // Inputs on Port F
+    GPIO_PORTG_AHB_DIR_R &=~(1<<0);
+    GPIO_PORTG_AHB_DEN_R |= (1<<0); //
+    GPIO_PORTG_AHB_PUR_R |= (1<<0); // Pull-Up Resistor
+    GPIO_PORTG_AHB_PP_R   = 1;
+    GPIO_PORTG_AHB_PC_R   = 3;
+
+    // Inputs on Port F
+    GPIO_PORTL_DIR_R &=~(1<<5|1<<4);
+    GPIO_PORTL_DEN_R |= (1<<5|1<<4); //
+    GPIO_PORTL_PUR_R |= (1<<5|1<<4); // Pull-Up Resistor
+    GPIO_PORTL_PP_R   = 1;
+    GPIO_PORTL_PC_R   = 3;
 }
 //******************************************************************************
+
+
+
+//******************************************************************************
+// void drv_init_gpio_input ( void )
+// Initialisation for GPIO, basic configuration and default startup settings.
+//******************************************************************************
+void drv_sys_init_gpio_input ( void ) {
+    volatile uint32_t ui32Loop;
+
+/*  Datasheet @ page 757 @
+Texas Instruments-Production Data @ Tiva TM4C1294NCPDT Microcontroller
+Table 10-7. GPIO Register Map
+
+Offset 	Name Type 	Reset 					Description page
+0x000 	GPIODATA 	RW 		0x0000.0000 	GPIO Data 759
+0x400 	GPIODIR 	RW 		0x0000.0000 	GPIO Direction 760
+0x404 	GPIOIS 		RW 		0x0000.0000 	GPIO Interrupt Sense 761
+0x408 	GPIOIBE 	RW 		0x0000.0000 	GPIO Interrupt Both Edges 762
+0x40C 	GPIOIEV 	RW 		0x0000.0000 	GPIO Interrupt Event 763
+0x410 	GPIOIM 		RW 		0x0000.0000 	GPIO Interrupt Mask 764
+0x414 	GPIORIS 	RO 		0x0000.0000 	GPIO Raw Interrupt Status 765
+0x418 	GPIOMIS 	RO 		0x0000.0000 	GPIO Masked Interrupt Status 767
+0x41C 	GPIOICR 	W1C 	0x0000.0000 	GPIO Interrupt Clear 769
+0x420 	GPIOAFSEL 	RW 		- 				GPIO Alternate Function Select 770
+0x500 	GPIODR2R 	RW 		0x0000.00FF 	GPIO 2-mA Drive Select 772
+0x504 	GPIODR4R 	RW 		0x0000.0000 	GPIO 4-mA Drive Select 773
+0x508 	GPIODR8R 	RW 		0x0000.0000 	GPIO 8-mA Drive Select 774
+0x50C 	GPIOODR 	RW 		0x0000.0000 	GPIO Open Drain Select 775
+0x510 	GPIOPUR 	RW 		- 				GPIO Pull-Up Select 776
+0x514 	GPIOPDR 	RW 		0x0000.0000 	GPIO Pull-Down Select 778
+0x518 	GPIOSLR 	RW 		0x0000.0000 	GPIO Slew Rate Control Select 780
+0x51C 	GPIODEN 	RW 		- 				GPIO Digital Enable 781
+0x520 	GPIOLOCK 	RW 		0x0000.0001 	GPIO Lock 783
+0x524 	GPIOCR 		- 		- 				GPIO Commit 784
+0x528 	GPIOAMSEL 	RW 		0x0000.0000 	GPIO Analog Mode Select 786
+0x52C 	GPIOPCTL 	RW 		- 				GPIO Port Control 787
+0x530 	GPIOADCCTL 	RW 		0x0000.0000 	GPIO ADC Control 789
+0x534 	GPIODMACTL 	RW 		0x0000.0000 	GPIO DMA Control 790
+0x538 	GPIOSI 		RW 		0x0000.0000 	GPIO Select Interrupt 791
+0x53C 	GPIODR12R 	RW 		0x0000.0000 	GPIO 12-mA Drive Select 792
+0x540 	GPIOWAKEPEN RW 		0x0000.0000 	GPIO Wake Pin Enable 793
+0x544 	GPIOWAKELVL RW 		0x0000.0000 	GPIO Wake Level 795
+0x548 	GPIOWAKESTAT RO 	0x0000.0000 	GPIO Wake Status 797
+0xFC0 	GPIOPP 		RO 		0x0000.0001 	GPIO Peripheral Property 799
+0xFC4 	GPIOPC 		RW 		0x0000.0000 	GPIO Peripheral Configuration 800
+0xFD0 	GPIOPeriphID4 RO 	0x0000.0000 	GPIO Peripheral Identification 4 803
+0xFD4 	GPIOPeriphID5 RO 	0x0000.0000 	GPIO Peripheral Identification 5 804
+0xFD8 	GPIOPeriphID6 RO 	0x0000.0000 	GPIO Peripheral Identification 6 805
+0xFDC 	GPIOPeriphID7 RO 	0x0000.0000 	GPIO Peripheral Identification 7 806
+0xFE0 	GPIOPeriphID0 RO 	0x0000.0061 	GPIO Peripheral Identification 0 807
+0xFE4 	GPIOPeriphID1 RO 	0x0000.0000 	GPIO Peripheral Identification 1 808
+0xFE8 	GPIOPeriphID2 RO 	0x0000.0018 	GPIO Peripheral Identification 2 809
+0xFEC 	GPIOPeriphID3 RO 	0x0000.0001 	GPIO Peripheral Identification 3 810
+0xFF0 	GPIOPCellID0 RO 	0x0000.000D 	GPIO PrimeCell Identification 0 811
+0xFF4 	GPIOPCellID1 RO 	0x0000.00F0 	GPIO PrimeCell Identification 1 812
+0xFF8 	GPIOPCellID2 RO 	0x0000.0005 	GPIO PrimeCell Identification 2 813
+0xFFC 	GPIOPCellID3 RO 	0x0000.00B1 	GPIO PrimeCell Identification 3 814 */
+
+    // Enable the GPIO port that is used for the on-board Inputs.
+    SYSCTL_RCGCGPIO_R =
+    	SYSCTL_RCGCGPIO_R10 | //SYSCTL_RCGCGPIO_R10=GPIO Port L Run Mode Clock
+    	SYSCTL_RCGCGPIO_R8  | //SYSCTL_RCGCGPIO_R8= GPIO Port J Run Mode Clock
+    	SYSCTL_RCGCGPIO_R6  | //SYSCTL_RCGCGPIO_R6= GPIO Port G Run Mode Clock
+		SYSCTL_RCGCGPIO_R5  ; //SYSCTL_RCGCGPIO_R5= GPIO Port F Run Mode Clock
+
+    // Do a dummy read to insert a few cycles after enabling the peripheral.
+    ui32Loop = SYSCTL_RCGCGPIO_R;
+
+    // ..................................
+    // Enable the GPIO pin for the SW0 (PJ0).
+    // Set the direction as input, and enable the GPIO pin for digital function.
+    GPIO_PORTJ_AHB_DIR_R &=~0x03;
+    GPIO_PORTJ_AHB_DEN_R |= 0x03; // SW0 and SW1: 0x01 and 0x02
+    GPIO_PORTJ_AHB_PUR_R |= 0x03; // Pull-Up Resistor
+    GPIO_PORTJ_AHB_PP_R   = 1;
+    GPIO_PORTJ_AHB_PC_R   = 3;
+
+    /*// Set the direction as input, and enable the GPIO pin for digital function.
+    // Inputs on Port F
+    GPIO_PORTF_AHB_DIR_R &=~(1<<3|1<<2|1<<1);
+    GPIO_PORTF_AHB_DEN_R |= (1<<3|1<<2|1<<1); //
+    GPIO_PORTF_AHB_PUR_R |= (1<<3|1<<2|1<<1); // Pull-Up Resistor
+    GPIO_PORTF_AHB_PP_R   = 1;
+    GPIO_PORTF_AHB_PC_R   = 3;
+
+    // Inputs on Port F
+    GPIO_PORTG_AHB_DIR_R &=~(1<<0);
+    GPIO_PORTG_AHB_DEN_R |= (1<<0); //
+    GPIO_PORTG_AHB_PUR_R |= (1<<0); // Pull-Up Resistor
+    GPIO_PORTG_AHB_PP_R   = 1;
+    GPIO_PORTG_AHB_PC_R   = 3;
+
+    // Inputs on Port F
+    GPIO_PORTL_DIR_R &=~(1<<5|1<<4);
+    GPIO_PORTL_DEN_R |= (1<<5|1<<4); //
+    GPIO_PORTL_PUR_R |= (1<<5|1<<4); // Pull-Up Resistor
+    GPIO_PORTL_PP_R   = 1;
+    GPIO_PORTL_PC_R   = 3;*/
+}
 
 
 
@@ -321,8 +483,7 @@ void drv_usr_init_led_7segments ( void ) {
     GPIO_PORTM_PC_R    = 3;
     GPIO_PORTM_DR12R_R|=1; GPIO_PORTM_DR8R_R|=1; GPIO_PORTM_DR4R_R|=1;
 
-    GPIO_PORTQ_DIR_R  = 0xFF;  GPIO_PORTQ_DEN_R
-    = 0xFF;
+    GPIO_PORTQ_DIR_R  = 0xFF;  GPIO_PORTQ_DEN_R = 0xFF;
     GPIO_PORTQ_PP_R   = 1;
     GPIO_PORTQ_PC_R   = 3;
     GPIO_PORTQ_DR12R_R|=1; GPIO_PORTQ_DR8R_R|=1; GPIO_PORTQ_DR4R_R|=1;
@@ -330,7 +491,6 @@ void drv_usr_init_led_7segments ( void ) {
     // PQ2, PA3, also PQ3, PA2 are use one pins
     GPIO_PORTA_AHB_DIR_R &= ~((1<<2)|(1<<3));
     GPIO_PORTA_AHB_DIR_R &= ~((1<<2)|(1<<3));
-
 }
 //******************************************************************************
 
@@ -367,6 +527,33 @@ void drv_usr_init_led_8x8 ( void ) {
     GPIO_PORTN_PP_R        = 1;
     GPIO_PORTN_PC_R        = 3;
     GPIO_PORTN_DR12R_R    |= 1; GPIO_PORTN_DR8R_R |= 1; GPIO_PORTN_DR4R_R |= 1;
+}
+//******************************************************************************
+
+
+
+//******************************************************************************
+// void drv_led_7segments_position (unsigned char pos)
+// Initialisation for Possition in leds on 7 segments indicator, basic
+// configuration and default startup settings.
+//******************************************************************************
+void  drv_led_7segments_clean ( void ) {
+
+	GPIO_PORTA_AHB_DATA_R |=  (1<<2); // Anod (Common) 0
+	GPIO_PORTA_AHB_DATA_R |=  (1<<3); // Anod (Common) 1
+	GPIO_PORTK_DATA_R     |=  (1<<3); // Anod (Common) 2
+	GPIO_PORTP_DATA_R     |=  (1<<3); // Anod (Common) 3
+	GPIO_PORTM_DATA_R     |=  (1<<6); // Anod (Common) 4
+
+    // Data to 7-segments
+	GPIO_PORTK_DATA_R     |=  (1<<2); // Cathod - A
+	GPIO_PORTA_AHB_DATA_R |=  (1<<4); // Cathod - B
+	GPIO_PORTK_DATA_R     |=  (1<<1); // Cathod - C
+	GPIO_PORTB_AHB_DATA_R |=  (1<<5); // Cathod - D
+	GPIO_PORTB_AHB_DATA_R |=  (1<<4); // Cathod - E
+	GPIO_PORTK_DATA_R     |=  (1<<3); // Cathod - F
+	GPIO_PORTA_AHB_DATA_R |=  (1<<5); // Cathod - G
+	GPIO_PORTK_DATA_R     |=  (1<<0); // Cathod - H}
 }
 //******************************************************************************
 
@@ -635,7 +822,7 @@ void drv_led_8x8_pixel_set ( uint8_t x, uint8_t y, uint8_t val ) {
 	GPIO_PORTB_AHB_DATA_R &= ~(1<<3); // Cathod - y4
 	GPIO_PORTC_AHB_DATA_R &= ~(1<<7); // Cathod - y5
 	GPIO_PORTE_AHB_DATA_R &= ~(1<<4); // Cathod - y6
-	GPIO_PORTD_AHB_DATA_R &= ~(1<<7); // Cathod - X7
+	GPIO_PORTD_AHB_DATA_R &= ~(1<<7); // Cathod - y7
 	GPIO_PORTD_AHB_DATA_R &= ~(1<<1); // Cathod - y8
 	GPIO_PORTP_DATA_R     &= ~(1<<2); // Cathod - y9
 	GPIO_PORTD_AHB_DATA_R &= ~(1<<0); // Cathod - y10
@@ -653,7 +840,7 @@ void drv_led_8x8_pixel_set ( uint8_t x, uint8_t y, uint8_t val ) {
 		case 0x04: GPIO_PORTB_AHB_DATA_R |=  (1<<3); break; // Cathod - y4
 		case 0x05: GPIO_PORTC_AHB_DATA_R |=  (1<<7); break; // Cathod - y5
 		case 0x06: GPIO_PORTE_AHB_DATA_R |=  (1<<4); break; // Cathod - y6
-		case 0x07: GPIO_PORTD_AHB_DATA_R |=  (1<<7); break; // Cathod - X7
+		case 0x07: GPIO_PORTD_AHB_DATA_R |=  (1<<7); break; // Cathod - y7
 
 		case 0x08: GPIO_PORTD_AHB_DATA_R |=  (1<<1); break; // Cathod - y8
 		case 0x09: GPIO_PORTP_DATA_R     |=  (1<<2); break; // Cathod - y9
@@ -763,7 +950,8 @@ void drv_led_8x8_show_byte ( uint8_t Byte, uint8_t Line ) {
 
 
 //******************************************************************************
-// LEDS[0,1,2,3]=[PN1,PN0,PF4,PF0]
+// LEDS[ 0,   1,   2,   3   ]
+//    =[ PN1, PN0, PF4, PF0 ]
 //******************************************************************************
 int drv_led_blink (void) {
     volatile uint32_t ui32Loop;
@@ -861,11 +1049,15 @@ void drv_usr_init_scheduler_and_all_timers (void) {
     timer_leds5x8.set_timer_limit  = 50; // set period for 5x8 7-segment display
 
     timer_leds8x8.timer_is_set = 1;
-    timer_leds8x8.set_timer_limit  = 3; // set period for timer counter
+    timer_leds8x8.set_timer_limit  = 50; // set period for timer counter
 
-    timer_keys_usr1_2.timer_is_set = 1;
-    timer_keys_usr1_2.ready_to_use = 1;
-    timer_keys_usr1_2.set_timer_limit  = 2000; // set period for 8x8 leds display
+    timer_keys.timer_is_set = 1;
+    timer_keys.ready_to_use = 1;
+    timer_keys.set_timer_limit  = 1000; // set period for 8x8 leds display
+
+    timer_fft.timer_is_set = 1;
+    timer_fft.ready_to_use = 1;
+    timer_fft.set_timer_limit  = 200; // set period for 8x8 leds display
 
 	timer_leds1on.timer_is_set = 1;
     timer_leds1on.set_timer_limit  = 5000; // set period for led as time OFF
@@ -909,7 +1101,7 @@ void drv_usr_init_scheduler_and_all_timers (void) {
 
 
 //******************************************************************************
-t_timer_stat delay_timer_count (uint8_t cfg) {
+t_timer_stat delay_timer_leds8x8 (uint8_t cfg) {
 t_timer_stat err_code = _TIMER_NOT_READY;
 	if (cfg==0) {
 		timer_leds8x8.cur_timer_val=0;
@@ -936,17 +1128,17 @@ t_timer_stat err_code = _TIMER_NOT_READY;
 
 
 //******************************************************************************
-t_timer_stat delay_timer_keys_usr1_2 (uint8_t cfg) {
+t_timer_stat delay_timer_keys (uint8_t cfg) {
 t_timer_stat err_code = _TIMER_NOT_READY;
 	if (cfg==0) {
-		timer_keys_usr1_2.cur_timer_val=0;
+		timer_keys.cur_timer_val=0;
 	}
 
 	if (cfg=='?') {
-		if ( timer_keys_usr1_2.timer_is_set ) {
-			timer_keys_usr1_2.cur_timer_val++;
-			if ( timer_keys_usr1_2.cur_timer_val >= timer_keys_usr1_2.set_timer_limit ) {
-				 timer_keys_usr1_2.cur_timer_val=0;
+		if ( timer_keys.timer_is_set ) {
+			timer_keys.cur_timer_val++;
+			if ( timer_keys.cur_timer_val >= timer_keys.set_timer_limit ) {
+				 timer_keys.cur_timer_val=0;
 				err_code = _TIMER_READY;
 			} else {
 				err_code = _TIMER_NOT_READY;
@@ -975,6 +1167,34 @@ t_timer_stat err_code = _TIMER_NOT_READY;
 			timer_leds5x8.cur_timer_val++;
 			if ( timer_leds5x8.cur_timer_val >= timer_leds5x8.set_timer_limit ) {
 				 timer_leds5x8.cur_timer_val=0;
+				err_code = _TIMER_READY;
+			} else {
+				err_code = _TIMER_NOT_READY;
+			}
+		} else {
+			err_code = _TIMER_NOT_READY;
+		}
+	}
+
+	return err_code;
+}
+//******************************************************************************
+
+
+
+//******************************************************************************
+t_timer_stat delay_timer_fft (uint8_t cfg) {
+t_timer_stat err_code = _TIMER_NOT_READY;
+
+	if (cfg==0) {
+		timer_fft.cur_timer_val=0;
+	}
+
+	if (cfg=='?') {
+		if ( timer_fft.timer_is_set ) {
+			timer_fft.cur_timer_val++;
+			if ( timer_fft.cur_timer_val >= timer_fft.set_timer_limit ) {
+				timer_fft.cur_timer_val=0;
 				err_code = _TIMER_READY;
 			} else {
 				err_code = _TIMER_NOT_READY;
@@ -1127,7 +1347,7 @@ char *ultostr(unsigned long value, char *ptr, int base)
 
 
 //******************************************************************************
-char *ftostr(float value, char *p_string, int base, uint8_t *p_comma)
+char *ftostr(float value, uint8_t *p_string, int base, uint8_t *p_comma)
 {
   unsigned long t=0;
   unsigned long res=0;
@@ -1228,9 +1448,21 @@ char *ftostr(float value, char *p_string, int base, uint8_t *p_comma)
 
 
 //******************************************************************************
-void scan_keys ( t_io_values *p_io )
+t_ret_code keys_scan ( t_io_values *p_io )
 {
-	//if ( y_pos<16) { y_pos++; } else y_pos=0;
+	t_ret_code rc = RC_FAILED;
+
+	// Check input pointers
+	if ( p_io==NULL ) return RC_PTR_FAIL;
+
+	rc = RC_OK;
+
+	if ( GPIO_PORTF_AHB_DATA_R & (1<<1) ) { p_io->keys.k5=0; } else { p_io->keys.k5=1; }
+	if ( GPIO_PORTF_AHB_DATA_R & (1<<2) ) { p_io->keys.k4=0; } else { p_io->keys.k4=1; }
+	if ( GPIO_PORTF_AHB_DATA_R & (1<<3) ) { p_io->keys.k3=0; } else { p_io->keys.k3=1; }
+	if ( GPIO_PORTG_AHB_DATA_R & (1<<0) ) { p_io->keys.k2=0; } else { p_io->keys.k2=1; }
+	if ( GPIO_PORTL_DATA_R & (1<<4)     ) { p_io->keys.k1=0; } else { p_io->keys.k1=1; }
+	if ( GPIO_PORTL_DATA_R & (1<<5)     ) { p_io->keys.k0=0; } else { p_io->keys.k0=1; }
 
 	if ( (GPIO_PORTJ_AHB_DATA_R & 0x03) == BTN_PCS_0 ) {
 		if ( p_io->in<99999 )
@@ -1254,6 +1486,37 @@ void scan_keys ( t_io_values *p_io )
 		if ( ++p_io->y>15 ) p_io->y=0;
 		srand ( p_io->y *100 );
 	}
+
+	return rc;
+}
+//******************************************************************************
+
+
+
+//******************************************************************************
+t_ret_code keys_analyze ( t_io_values *p_io, t_sys_values *p_sys ) {
+t_ret_code rc = RC_FAILED;
+
+	// Check input pointers
+	if ( p_io==NULL | p_sys==NULL ) return RC_PTR_FAIL;
+
+	rc = RC_OK;
+
+	p_sys->key0 =0;
+	p_sys->key1 =0;
+	p_sys->key2 =0;
+	p_sys->key3 =0;
+	p_sys->key4 =0;
+	p_sys->key5 =0;
+
+	if ( p_io->keys.k0 ) p_sys->key0 =1;
+	if ( p_io->keys.k1 ) p_sys->key1 =1;
+	if ( p_io->keys.k2 ) p_sys->key2 =1;
+	if ( p_io->keys.k3 ) p_sys->key3 =1;
+	if ( p_io->keys.k4 ) p_sys->key4 =1;
+	if ( p_io->keys.k5 ) p_sys->key5 =1;
+
+	return rc;
 }
 //******************************************************************************
 
@@ -1291,7 +1554,8 @@ t_ret_code algo_Snake ( t_io_values *p_io,  t_io_Snake *p_snake ) {
 		case S_INIT:
 			p_snake->body = p_snake->ptr_field;
 			p_snake->ptr_field     = &a_field[0][0];
-			p_snake->ptr_field_eat = &a_field_eat[0][0];
+			//p_snake->ptr_field_eat = &a_field_eat[0][0];
+			p_snake->ptr_field_eat = &buf_out;
 			p_snake->curr_x        = 0;
 			p_snake->curr_y        = 0;
 
@@ -1311,8 +1575,7 @@ t_ret_code algo_Snake ( t_io_values *p_io,  t_io_Snake *p_snake ) {
 			// Fill field
 			//for ( xx=0; xx<8; xx++ )
 			{
-				for ( yy=0; yy<16; yy++ )
-				{
+				for ( yy=0; yy<16; yy++ ) {
 					rnd = (uint8_t)rand(); // get random number
 					if (rnd&0x01) rnd&=0x69; else rnd&=0x96;
 
@@ -1330,12 +1593,10 @@ t_ret_code algo_Snake ( t_io_values *p_io,  t_io_Snake *p_snake ) {
 			//drv_led_8x8_clear( 0, 0, 1 );
 			//for ( xx=0; xx<8; xx++ )
 			{
-				if ( _TIMER_READY == delay_timer_count('?') ) {
-					//delay_timer_count(0);
-
-					for ( yy=0; yy<16; yy/*++*/ )
-					{
-					//if (1==a_field_eat [xx][yy])
+				for ( yy=0; yy<16; yy/*++*/ ) {
+					if ( _TIMER_READY == delay_timer_leds8x8('?') ) {
+						//delay_timer_count(0);
+						//if (1==a_field_eat [xx][yy])
 						//io.in += 0.0001;
 						//drv_led_8x8_pixel_set(xx, yy, 0); // display info
 						drv_led_8x8_show_byte( a_field_eat_16b[yy], yy);
@@ -1344,7 +1605,7 @@ t_ret_code algo_Snake ( t_io_values *p_io,  t_io_Snake *p_snake ) {
 				}
 			}
 
-			p_snake->algo_step = S_START_RANDOM;//S_BEGIN;
+			p_snake->algo_step = S_BEGIN;
 			//p_snake->algo_step = S_MOVE;
 		break;
 
@@ -1387,14 +1648,16 @@ t_ret_code algo_Snake ( t_io_values *p_io,  t_io_Snake *p_snake ) {
 // Blinks on the leds and indicator.
 //******************************************************************************
 int main (void) {
-    volatile uint32_t   pos;
-    volatile uint32_t   cnt=0;
-	char       *p_str=0;
-    uint8_t     comma;
-	t_io_values io;
-	t_io_Snake  snake = {.algo_step=S_INIT};
+    uint8_t     rc;
+    volatile uint32_t  pos;
+    volatile uint32_t  cnt=0;
+	char        *p_str=0;
+    uint8_t      comma;
+	t_io_values  io  = {0};
+	t_sys_values sys = {0};
+	t_io_Snake   snake = { .algo_step = S_INIT };
 
-    drv_sys_init_gpio ();
+    drv_sys_init_gpio_output_input ();
     drv_usr_init_led_7segments ();
     drv_usr_init_led_8x8 ();
     drv_usr_init_scheduler_and_all_timers ();
@@ -1407,29 +1670,58 @@ int main (void) {
 		drv_led_blink (); // timer_leds4on.common_rule
 
 		//if ( _TIMER_READY == delay_timer_count('?') ) {
-		//	//delay_timer_count(0);
 		//	//io.in += 0.0001;
 		//}
 
+		//if (sys.key_pressed==0)
+		//	drv_led_7segments_clean();
+		//else
 		if ( _TIMER_READY == delay_timer_leds5x8('?') ) {
-			//delay_timer_leds5x8(0);
 			if ( pos < 5 ) {
-				p_str = ftostr ( io.in, data, 10, &comma ); // value, *ptr, base, *comma_possition
-				drv_led_7segments_symbol ( pos, data[pos], comma ); // display info
-				drv_led_7segments_position ( pos ); // dinamic switching
-				//drv_led_8x8_pixel_set ( io.x, io.y, 0 ); // display info
+				p_str = ftostr ( io.in, data, 10, &comma ); // value, *ptr, base, *comma
+				if (p_str!=NULL) {
+					drv_led_7segments_symbol ( pos, data[pos], comma ); // display info
+					drv_led_7segments_position ( pos ); // dinamic switching
+					//drv_led_8x8_pixel_set ( io.x, io.y, 0 ); // display info
+				}
 				pos++;
 				cnt++;
     		}
 			if (pos>=5) pos=0;
     	}
 
-		if (  _TIMER_READY == delay_timer_keys_usr1_2('?') ) {
-			scan_keys ( &io );
-			//delay_timer_keys_usr1_2(0);
+		if ( _TIMER_READY == delay_timer_keys ('?') ) {
+			keys_scan ( &io );
+			keys_analyze ( &io, &sys );
+			if ( sys.key0 ||sys.key1 ||sys.key2 ||sys.key3 ||sys.key4 ||sys.key5 ) {
+				sys.key_pressed=1;
+				if (sys.key5) { if ( io.in < 99999 ) io.in += 0.001; }
+				if (sys.key4) { if ( io.in > 0 )     io.in -= 0.001; }
+				if (sys.key3) { if ( io.in < 99999 ) io.in += 0.01; }
+				if (sys.key2) { if ( io.in > 0 )     io.in -= 0.01; }
+				if (sys.key1) { if ( io.in < 99999 ) io.in += 0.1; }
+				if (sys.key0) { if ( io.in > 0 )     io.in -= 0.1; }
+			} else {
+				sys.key_pressed=0;
+			}
 		}
 
-		if ( RC_OK != algo_Snake (&io, &snake) ) { error_forever_loop; }
+		if ( _TIMER_READY == delay_timer_fft('?') ) {
+			if ( RC_OK != algo_Snake (&io, &snake) ) { error_forever_loop; }
+
+			/*char  yy=0;
+			float val=0;
+			rc = fft_calc();
+			if ( yy<16 ) {
+				//val = abs(buf_out[yy]*10);
+				if ( buf_out[yy] <0 ) {  val = -1*(buf_out[yy] * 10000);
+				} else {                 val =    (buf_out[yy] * 10000); }
+				drv_led_8x8_show_byte( (uint8_t)val, yy );
+				yy++;
+			} else {
+				yy=0;
+			}*/
+		}
 	}
 }
 //******************************************************************************
