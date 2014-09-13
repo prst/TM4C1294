@@ -1,159 +1,22 @@
 //*****************************************************************************
-//
-// blinky.c - Simple example to blink the on-board LED.
-//
+//*****************************************************************************
+// TM4C1294.c - Simple example to work with LEDs.
 // This is start code of the EK-TM4C1294XL.
-//
+//*****************************************************************************
 //*****************************************************************************
 
-#include <stdlib.h>
-#include <stdint.h>
-#include "inc/tm4c1294ncpdt.h"
-
-#include <stdbool.h>
-#include <stdint.h>
-#include "inc/hw_memmap.h"
-#include "driverlib/gpio.h"
-#include "driverlib/pin_map.h"
-#include "driverlib/pwm.h"
-#include "driverlib/sysctl.h"
-#include "driverlib/uart.h"
-#include "utils/uartstdio.h"
+#include "TM4C1294_edu.h"
+#include "time_delays.h"
 
 //#include "inc/hw_types.h"
 //#include "drivers/pinout.h"
 //#include "driverlib/rom.h"
 //#include "driverlib/rom_map.h"
 
-//typedef  enum { FALSE, TRUE } bool;
 
-
-//*****************************************************************************
-//! \addtogroup example_list
-//! <h1>Blinky (blinky)</h1>
-//! A very simple example that blinks the on-board LED using direct register
-//! access.
-//*****************************************************************************
-
-
-
-//******************************************************************************
-//#define _LEDS_POS_I_SET   ( GPIO_PORTA_AHB_DATA_R |=  (1<<2) ) // Anod (Common) 4
-//#define _LEDS_POS_I_CLR   ( GPIO_PORTA_AHB_DATA_R &= ~(1<<2) ) // Anod (Common) 4
-#define _LEDS_POS_I_SET   ( GPIO_PORTQ_DATA_R |=  (1<<3) ) // Anod (Common) 4
-#define _LEDS_POS_I_CLR   ( GPIO_PORTQ_DATA_R &= ~(1<<3) ) // Anod (Common) 4
-#define _LEDS_POS_II_SET  ( GPIO_PORTP_DATA_R |=  (1<<3) )     // Anod (Common) 1
-#define _LEDS_POS_II_CLR  ( GPIO_PORTP_DATA_R &= ~(1<<3) )     // Anod (Common) 1
-#define _LEDS_POS_III_SET ( GPIO_PORTQ_DATA_R |=  (1<<1) )     // Anod (Common) 2
-#define _LEDS_POS_III_CLR ( GPIO_PORTQ_DATA_R &= ~(1<<1) )     // Anod (Common) 2
-//#define _LEDS_POS_IV_SET  ( GPIO_PORTA_AHB_DATA_R |=  (1<<3) ) // Anod (Common) 3
-//#define _LEDS_POS_IV_CLR  ( GPIO_PORTA_AHB_DATA_R &= ~(1<<3) ) // Anod (Common) 3
-#define _LEDS_POS_IV_SET  ( GPIO_PORTQ_DATA_R |=  (1<<2) ) // Anod (Common) 3
-#define _LEDS_POS_IV_CLR  ( GPIO_PORTQ_DATA_R &= ~(1<<2) ) // Anod (Common) 3
-#define _LEDS_POS_V_SET   ( GPIO_PORTM_DATA_R |=  (1<<6) )     // Anod (Common) 0
-#define _LEDS_POS_V_CLR   ( GPIO_PORTM_DATA_R &= ~(1<<6) )     // Anod (Common) 0
-//******************************************************************************
-#define  BTN_PCS_0  (1)
-#define  BTN_PCS_1  (2)
-//******************************************************************************
-#define  error_forever_loop   for(;;){}
-//******************************************************************************
-
-
-// LEDS[0,1,2,3]=[PN1,PN0,PF4,PF0]
-// USER_SWITCH[0,1]=[PJ0,PJ1]
-
-//******************************************************************************
-// TYPES
-//******************************************************************************
-typedef enum {
-	_TIMER_READY     = 0,
-	_TIMER_NOT_READY = 1
-} t_timer_stat;
-
-/* Discriptor of timer settings */
-typedef struct {
-	uint8_t    ready_to_use   :1;
-	uint8_t    timer_is_set   :1;
-	uint32_t   set_timer_limit;
-	uint32_t   cur_timer_val;
-	uint32_t  *common_rule;
-} t_Scheduler;
-
-/* Discriptor of Keys */
-typedef struct {
-	uint8_t  k0 :1;
-	uint8_t  k1 :1;
-	uint8_t  k2 :1;
-	uint8_t  k3 :1;
-	uint8_t  k4 :1;
-	uint8_t  k5 :1;
-	uint8_t  reserv :2;
-} t_io_keys;
-
-/* Discriptor of I/O */
-typedef struct {
-	float      in;
-	uint8_t    x;
-	uint8_t    y;
-	t_io_keys  keys;
-} t_io_values;
-
-/* Discriptor of Keys */
-typedef struct {
-	uint16_t  key0         :1;
-	uint16_t  key1         :1;
-	uint16_t  key2         :1;
-	uint16_t  key3         :1;
-	uint16_t  key4         :1;
-	uint16_t  key5         :1;
-	uint16_t  key_pressed  :1;
-	uint16_t  status       :3;
-	uint16_t  reserved     :6;
-} t_sys_values;
-
-/* Discriptor of zmeyka */
-typedef struct {
-	uint8_t   *body;
-	uint8_t   *ptr_field;
-	uint8_t   *ptr_field_eat;
-	uint32_t  len       :4;  // Lenght
-	uint32_t  direction :2;  // 0:Up, 1:Down, 2:Left, 3:Right
-	uint32_t  blinkhead :2;  // Blinking state for head of Snake
-	uint32_t  curr_x    :3;  // Current position of head, axis X
-	uint32_t  curr_y    :4;  // Current position of head, axis X
-	uint32_t  next_x    :3;  // Calculated next position of head, axis X
-	uint32_t  next_y    :4;  // Calculated next position of head, axis X
-	uint32_t  algo_step :4;  // Algorithm step
-	uint32_t  rezerv    :6;  // ...
-	uint32_t  rnd;           // Random value
-} t_io_Snake;
-
-typedef enum {
-	RC_OK = 0,
-	RC_PTR_FAIL,
-	RC_FAILED
-} t_ret_code;
-
-typedef enum {
-	S_INIT = 0,
-	S_START_RANDOM,
-	S_BEGIN,
-	S_MOVE,
-	S_EAT_YES,
-	S_EAT_NO,
-	S_RANDOM,
-	S_CHANGE_DIRECTION,
-	S_BORDER_END
-} t_algo_step;
-
-//******************************************************************************
-
-
-
-//******************************************************************************
-// Global and system variables
-//******************************************************************************
+/* *****************************************************************************
+ * Global and system variables
+ * ************************************************************************** */
 t_Scheduler timer_leds5x8;
 t_Scheduler timer_leds1on, timer_leds1off;
 t_Scheduler timer_leds2on, timer_leds2off;
@@ -162,6 +25,7 @@ t_Scheduler timer_leds4on, timer_leds4off;
 t_Scheduler timer_leds8x8;
 t_Scheduler timer_keys;
 t_Scheduler timer_fft;
+t_Scheduler timer_rnd;
 
 uint32_t  dly1 = 0;
 uint32_t  dly2 = 0;
@@ -172,47 +36,38 @@ uint32_t  leds_position;
 uint8_t   a_field [8][16];
 uint8_t   a_field_eat [8][16];
 uint8_t   a_field_eat_16b [16];
+
 uint8_t   data [5] = { 1,  3,  5,  7,  9 };
 uint8_t   datas[5] = {'1','3','5','7','9'};
 
 
-#define  FFT_NUM  (32)
-extern double  buf_in[FFT_NUM];
-extern double  buf_out[2*FFT_NUM];
 
-
-//******************************************************************************
-
-
-
-//******************************************************************************
+/* *****************************************************************************
+ *
+ * ************************************************************************** */
 void  drv_sys_init_gpio_output_input ( void );
 void  drv_usr_init_led_7segments ( void );
 void  drv_usr_init_led_8x8 ( void );
 void  drv_led_7segments_clean ( void );
 void  drv_led_7segments_position (unsigned char pos);
 void  drv_led_7segments_symbol ( uint8_t position, uint8_t symbol, uint8_t comma );
-int   drv_led_blink (void);
-void  drv_usr_init_scheduler_and_all_timers (void);
-t_timer_stat delay_timer_leds8x8 (uint8_t cfg);
-t_timer_stat delay_timer_keys (uint8_t cfg);
-t_timer_stat delay_timer_leds5x8 (uint8_t cfg);
-t_timer_stat delay_timer_fft (uint8_t cfg);
+t_ret_code keys_scan ( t_io_values *p_io );
+t_ret_code keys_analyze ( t_io_values *p_io, t_sys_values *p_sys );
 char *IntToStr(int i, char b[]);
 char *FloatToLeds5x8(float ff, char b[]);
 char *ultostr(unsigned long value, char *ptr, int base);
-char *ftostr(float value, uint8_t *p_string, int base, uint8_t *p_comma);
-t_ret_code keys_scan ( t_io_values *p_io );
-t_ret_code keys_analyze ( t_io_values *p_io, t_sys_values *p_sys );
+uint8_t *ftostr(float value, uint8_t *p_string, int base, uint8_t *p_comma);
 t_ret_code algo_Snake ( t_io_values *p_io,  t_io_Snake *p_snake );
+
+
 //******************************************************************************
 
 
 
-//******************************************************************************
-// void drv_init_gpio_output ( void )
-// Initialisation for GPIO, basic configuration and default startup settings.
-//******************************************************************************
+/* *****************************************************************************
+ * void drv_sys_init_gpio_output_input ( void )
+ * Initialisation for GPIO, basic configuration and default startup settings.
+ * ************************************************************************** */
 void drv_sys_init_gpio_output_input ( void ) {
     volatile uint32_t ui32Loop;
 
@@ -346,15 +201,26 @@ Offset 	Name Type 	Reset 					Description page
     GPIO_PORTL_PUR_R |= (1<<5|1<<4); // Pull-Up Resistor
     GPIO_PORTL_PP_R   = 1;
     GPIO_PORTL_PC_R   = 3;
+
+    // ========================================================================
+    // PC[3:0], PD7, PE7 - are loacked by default, so read datasheet, page 743;
+    // ========================================================================
+    // PC[3:0] = {JTAG/SWD}
+    // PD[7]   = NMI
+    // PE[7]   = ????
+    // ========================================================================
+    // Unlock PortD PD7,
+    GPIO_PORTD_AHB_LOCK_R = 0x4C4F434B; // from datasheet, page 783;
+    GPIO_PORTD_AHB_CR_R  = 0xff;
 }
 //******************************************************************************
 
 
 
-//******************************************************************************
-// void drv_init_gpio_input ( void )
-// Initialisation for GPIO, basic configuration and default startup settings.
-//******************************************************************************
+/* *****************************************************************************
+ * void drv_init_gpio_input ( void )
+ * Initialisation for GPIO, basic configuration and default startup settings.
+ * ************************************************************************** */
 void drv_sys_init_gpio_input ( void ) {
     volatile uint32_t ui32Loop;
 
@@ -451,11 +317,11 @@ Offset 	Name Type 	Reset 					Description page
 
 
 
-//******************************************************************************
-// void drv_led_7segments_init ( void )
-// Initialisation for leds on board, basic configuration and default startup
-// settings.
-//******************************************************************************
+/* *****************************************************************************
+ * void drv_led_7segments_init ( void )
+ * Initialisation for leds on board, basic configuration and default startup
+ * settings.
+ * ************************************************************************** */
 void drv_usr_init_led_7segments ( void ) {
     // Initial 7-segments
     GPIO_PORTA_AHB_DIR_R  = 0xFF;  GPIO_PORTA_AHB_DEN_R = 0xFF;
@@ -496,11 +362,11 @@ void drv_usr_init_led_7segments ( void ) {
 
 
 
-//******************************************************************************
-// void drv_led_7segments_init ( void )
-// Initialisation for leds on board, basic configuration and default startup
-// settings.
-//******************************************************************************
+/* *****************************************************************************
+ * void drv_usr_init_led_8x8 ( void )
+ * Initialisation for leds on board, basic configuration and default startup
+ * settings.
+ * ************************************************************************** */
 void drv_usr_init_led_8x8 ( void ) {
     // Initial 7-segments
     GPIO_PORTC_AHB_DIR_R   = 0xFF;  GPIO_PORTC_AHB_DEN_R = 0xFF;
@@ -532,11 +398,11 @@ void drv_usr_init_led_8x8 ( void ) {
 
 
 
-//******************************************************************************
-// void drv_led_7segments_position (unsigned char pos)
-// Initialisation for Possition in leds on 7 segments indicator, basic
-// configuration and default startup settings.
-//******************************************************************************
+/* *****************************************************************************
+ * void drv_led_7segments_position (unsigned char pos)
+ * Initialisation for Possition in leds on 7 segments indicator, basic
+ * configuration and default startup settings.
+ * ************************************************************************** */
 void  drv_led_7segments_clean ( void ) {
 
 	GPIO_PORTA_AHB_DATA_R |=  (1<<2); // Anod (Common) 0
@@ -559,11 +425,11 @@ void  drv_led_7segments_clean ( void ) {
 
 
 
-//******************************************************************************
-// void drv_led_7segments_position (unsigned char pos)
-// Initialisation for Possition in leds on 7 segments indicator, basic
-// configuration and default startup settings.
-//******************************************************************************
+/* *****************************************************************************
+ * void drv_led_7segments_position (unsigned char pos)
+ * Initialisation for Possition in leds on 7 segments indicator, basic
+ * configuration and default startup settings.
+ * ************************************************************************** */
 void drv_led_7segments_position (unsigned char pos) {
 	/*
 	GPIO_PORTA_AHB_DATA_R |=  (1<<2); // Anod (Common) 0
@@ -584,7 +450,9 @@ void drv_led_7segments_position (unsigned char pos) {
 
 
 
-//******************************************************************************
+/* *****************************************************************************
+ *
+ * ************************************************************************** */
 void drv_led_7segments_symbol ( uint8_t position, uint8_t symbol, uint8_t comma ) {
     // Data to 7-segments
 	GPIO_PORTK_DATA_R     |=  (1<<2); // Cathod - A
@@ -757,7 +625,9 @@ void drv_led_7segments_symbol ( uint8_t position, uint8_t symbol, uint8_t comma 
 
 
 
-//******************************************************************************
+/* *****************************************************************************
+ *
+ * ************************************************************************** */
 void drv_led_8x8_clear ( uint8_t x, uint8_t y, uint8_t clear ) {
 	if (1==clear) {
 		/*GPIO_PORTC_AHB_DATA_R |=  (1<<4); // Cathod - X0
@@ -791,7 +661,9 @@ void drv_led_8x8_clear ( uint8_t x, uint8_t y, uint8_t clear ) {
 
 
 
-//******************************************************************************
+/* *****************************************************************************
+ *
+ * ************************************************************************** */
 void drv_led_8x8_pixel_set ( uint8_t x, uint8_t y, uint8_t val ) {
 
 	GPIO_PORTC_AHB_DATA_R |=  (1<<4); // Cathod - X0
@@ -856,33 +728,45 @@ void drv_led_8x8_pixel_set ( uint8_t x, uint8_t y, uint8_t val ) {
 
 
 
-//******************************************************************************
-void drv_led_8x8_show_byte ( uint8_t Byte, uint8_t Line ) {
-	/*Catod: X0*/ if (Byte&0x01) GPIO_PORTC_AHB_DATA_R &=~(1<<4); else GPIO_PORTC_AHB_DATA_R|=(1<<4);
-	/*Catod: X1*/ if (Byte&0x02) GPIO_PORTC_AHB_DATA_R &=~(1<<5); else GPIO_PORTC_AHB_DATA_R|=(1<<5);
-	/*Catod: X2*/ if (Byte&0x04) GPIO_PORTC_AHB_DATA_R &=~(1<<6); else GPIO_PORTC_AHB_DATA_R|=(1<<6);
-	/*Catod: X3*/ if (Byte&0x08) GPIO_PORTE_AHB_DATA_R &=~(1<<5); else GPIO_PORTE_AHB_DATA_R|=(1<<5);
-	/*Catod: X4*/ if (Byte&0x10) GPIO_PORTE_AHB_DATA_R &=~(1<<0); else GPIO_PORTE_AHB_DATA_R|=(1<<0);
-	/*Catod: X5*/ if (Byte&0x20) GPIO_PORTE_AHB_DATA_R &=~(1<<1); else GPIO_PORTE_AHB_DATA_R|=(1<<1);
-	/*Catod: X6*/ if (Byte&0x40) GPIO_PORTE_AHB_DATA_R &=~(1<<2); else GPIO_PORTE_AHB_DATA_R|=(1<<2);
-	/*Catod: X7*/ if (Byte&0x80) GPIO_PORTE_AHB_DATA_R &=~(1<<3); else GPIO_PORTE_AHB_DATA_R|=(1<<3);
+/* *****************************************************************************
+ *
+ * ************************************************************************** */
+void drv_led_8x8_show_byte ( uint8_t val, uint8_t xx, uint8_t yy ) {
+#if (0)
+	/*Catod: X0*/ if (val&0x01) GPIO_PORTC_AHB_DATA_R &=~(1<<4); else GPIO_PORTC_AHB_DATA_R|=(1<<4);
+	/*Catod: X1*/ if (val&0x02) GPIO_PORTC_AHB_DATA_R &=~(1<<5); else GPIO_PORTC_AHB_DATA_R|=(1<<5);
+	/*Catod: X2*/ if (val&0x04) GPIO_PORTC_AHB_DATA_R &=~(1<<6); else GPIO_PORTC_AHB_DATA_R|=(1<<6);
+	/*Catod: X3*/ if (val&0x08) GPIO_PORTE_AHB_DATA_R &=~(1<<5); else GPIO_PORTE_AHB_DATA_R|=(1<<5);
+	/*Catod: X4*/ if (val&0x10) GPIO_PORTE_AHB_DATA_R &=~(1<<0); else GPIO_PORTE_AHB_DATA_R|=(1<<0);
+	/*Catod: X5*/ if (val&0x20) GPIO_PORTE_AHB_DATA_R &=~(1<<1); else GPIO_PORTE_AHB_DATA_R|=(1<<1);
+	/*Catod: X6*/ if (val&0x40) GPIO_PORTE_AHB_DATA_R &=~(1<<2); else GPIO_PORTE_AHB_DATA_R|=(1<<2);
+	/*Catod: X7*/ if (val&0x80) GPIO_PORTE_AHB_DATA_R &=~(1<<3); else GPIO_PORTE_AHB_DATA_R|=(1<<3);
+#endif
+	/*Catod: X0*/ if (val&(xx==0)) GPIO_PORTC_AHB_DATA_R &=~(1<<4); else GPIO_PORTC_AHB_DATA_R|=(1<<4);
+	/*Catod: X1*/ if (val&(xx==1)) GPIO_PORTC_AHB_DATA_R &=~(1<<5); else GPIO_PORTC_AHB_DATA_R|=(1<<5);
+	/*Catod: X2*/ if (val&(xx==2)) GPIO_PORTC_AHB_DATA_R &=~(1<<6); else GPIO_PORTC_AHB_DATA_R|=(1<<6);
+	/*Catod: X3*/ if (val&(xx==3)) GPIO_PORTE_AHB_DATA_R &=~(1<<5); else GPIO_PORTE_AHB_DATA_R|=(1<<5);
+	/*Catod: X4*/ if (val&(xx==4)) GPIO_PORTE_AHB_DATA_R &=~(1<<0); else GPIO_PORTE_AHB_DATA_R|=(1<<0);
+	/*Catod: X5*/ if (val&(xx==5)) GPIO_PORTE_AHB_DATA_R &=~(1<<1); else GPIO_PORTE_AHB_DATA_R|=(1<<1);
+	/*Catod: X6*/ if (val&(xx==6)) GPIO_PORTE_AHB_DATA_R &=~(1<<2); else GPIO_PORTE_AHB_DATA_R|=(1<<2);
+	/*Catod: X7*/ if (val&(xx==7)) GPIO_PORTE_AHB_DATA_R &=~(1<<3); else GPIO_PORTE_AHB_DATA_R|=(1<<3);
 
-	/*Anod: y0*/  if((15-Line)==0)  GPIO_PORTM_DATA_R    |=(1<<4); else GPIO_PORTM_DATA_R    &=~(1<<4);
-	/*Anod: y1*/  if((15-Line)==1)  GPIO_PORTA_AHB_DATA_R|=(1<<6); else GPIO_PORTA_AHB_DATA_R&=~(1<<6);
-	/*Anod: y2*/  if((15-Line)==2)  GPIO_PORTD_AHB_DATA_R|=(1<<3); else GPIO_PORTD_AHB_DATA_R&=~(1<<3);
-	/*Anod: y3*/  if((15-Line)==3)  GPIO_PORTB_AHB_DATA_R|=(1<<2); else GPIO_PORTB_AHB_DATA_R&=~(1<<2);
-	/*Anod: y4*/  if((15-Line)==4)  GPIO_PORTB_AHB_DATA_R|=(1<<3); else GPIO_PORTB_AHB_DATA_R&=~(1<<3);
-	/*Anod: y5*/  if((15-Line)==5)  GPIO_PORTC_AHB_DATA_R|=(1<<7); else GPIO_PORTC_AHB_DATA_R&=~(1<<7);
-	/*Anod: y6*/  if((15-Line)==6)  GPIO_PORTE_AHB_DATA_R|=(1<<4); else GPIO_PORTE_AHB_DATA_R&=~(1<<4);
-	/*Anod: y7*/  if((15-Line)==7)  GPIO_PORTD_AHB_DATA_R|=(1<<7); else GPIO_PORTD_AHB_DATA_R&=~(1<<7);
-	/*Anod: y8*/  if((15-Line)==8)  GPIO_PORTD_AHB_DATA_R|=(1<<1); else GPIO_PORTD_AHB_DATA_R&=~(1<<1);
-	/*Anod: y9*/  if((15-Line)==9)  GPIO_PORTP_DATA_R    |=(1<<2); else GPIO_PORTP_DATA_R    &=~(1<<2);
-	/*Anod: y10*/ if((15-Line)==10) GPIO_PORTD_AHB_DATA_R|=(1<<0); else GPIO_PORTD_AHB_DATA_R&=~(1<<0);
-	/*Anod: y11*/ if((15-Line)==11) GPIO_PORTM_DATA_R    |=(1<<3); else GPIO_PORTM_DATA_R    &=~(1<<3);
-	/*Anod: y12*/ if((15-Line)==12) GPIO_PORTH_AHB_DATA_R|=(1<<2); else GPIO_PORTH_AHB_DATA_R&=~(1<<2);
-	/*Anod: y13*/ if((15-Line)==13) GPIO_PORTH_AHB_DATA_R|=(1<<3); else GPIO_PORTH_AHB_DATA_R&=~(1<<3);
-	/*Anod: y14*/ if((15-Line)==14) GPIO_PORTN_DATA_R    |=(1<<2); else GPIO_PORTN_DATA_R    &=~(1<<2);
-	/*Anod: y15*/ if((15-Line)==15) GPIO_PORTN_DATA_R    |=(1<<3); else GPIO_PORTN_DATA_R    &=~(1<<3);
+	/*Anod: y0*/  if((15-yy)==0)  GPIO_PORTM_DATA_R    |=(1<<4); else GPIO_PORTM_DATA_R    &=~(1<<4);
+	/*Anod: y1*/  if((15-yy)==1)  GPIO_PORTA_AHB_DATA_R|=(1<<6); else GPIO_PORTA_AHB_DATA_R&=~(1<<6);
+	/*Anod: y2*/  if((15-yy)==2)  GPIO_PORTD_AHB_DATA_R|=(1<<3); else GPIO_PORTD_AHB_DATA_R&=~(1<<3);
+	/*Anod: y3*/  if((15-yy)==3)  GPIO_PORTB_AHB_DATA_R|=(1<<2); else GPIO_PORTB_AHB_DATA_R&=~(1<<2);
+	/*Anod: y4*/  if((15-yy)==4)  GPIO_PORTB_AHB_DATA_R|=(1<<3); else GPIO_PORTB_AHB_DATA_R&=~(1<<3);
+	/*Anod: y5*/  if((15-yy)==5)  GPIO_PORTC_AHB_DATA_R|=(1<<7); else GPIO_PORTC_AHB_DATA_R&=~(1<<7);
+	/*Anod: y6*/  if((15-yy)==6)  GPIO_PORTE_AHB_DATA_R|=(1<<4); else GPIO_PORTE_AHB_DATA_R&=~(1<<4);
+	/*Anod: y7*/  if((15-yy)==7)  GPIO_PORTD_AHB_DATA_R|=(1<<7); else GPIO_PORTD_AHB_DATA_R&=~(1<<7);
+	/*Anod: y8*/  if((15-yy)==8)  GPIO_PORTD_AHB_DATA_R|=(1<<1); else GPIO_PORTD_AHB_DATA_R&=~(1<<1);
+	/*Anod: y9*/  if((15-yy)==9)  GPIO_PORTP_DATA_R    |=(1<<2); else GPIO_PORTP_DATA_R    &=~(1<<2);
+	/*Anod: y10*/ if((15-yy)==10) GPIO_PORTD_AHB_DATA_R|=(1<<0); else GPIO_PORTD_AHB_DATA_R&=~(1<<0);
+	/*Anod: y11*/ if((15-yy)==11) GPIO_PORTM_DATA_R    |=(1<<3); else GPIO_PORTM_DATA_R    &=~(1<<3);
+	/*Anod: y12*/ if((15-yy)==12) GPIO_PORTH_AHB_DATA_R|=(1<<2); else GPIO_PORTH_AHB_DATA_R&=~(1<<2);
+	/*Anod: y13*/ if((15-yy)==13) GPIO_PORTH_AHB_DATA_R|=(1<<3); else GPIO_PORTH_AHB_DATA_R&=~(1<<3);
+	/*Anod: y14*/ if((15-yy)==14) GPIO_PORTN_DATA_R    |=(1<<2); else GPIO_PORTN_DATA_R    &=~(1<<2);
+	/*Anod: y15*/ if((15-yy)==15) GPIO_PORTN_DATA_R    |=(1<<3); else GPIO_PORTN_DATA_R    &=~(1<<3);
 
 	/* Force erase last row */ GPIO_PORTM_DATA_R &= ~(1<<4); // Anod - y0
 
@@ -949,10 +833,10 @@ void drv_led_8x8_show_byte ( uint8_t Byte, uint8_t Line ) {
 
 
 
-//******************************************************************************
-// LEDS[ 0,   1,   2,   3   ]
-//    =[ PN1, PN0, PF4, PF0 ]
-//******************************************************************************
+/* *****************************************************************************
+ * LEDS[ 0,   1,   2,   3   ]
+ *    =[ PN1, PN0, PF4, PF0 ]
+ * ************************************************************************** */
 int drv_led_blink (void) {
     volatile uint32_t ui32Loop;
     //.........................................................................
@@ -1043,177 +927,88 @@ int drv_led_blink (void) {
 
 
 
-//******************************************************************************
-void drv_usr_init_scheduler_and_all_timers (void) {
-    timer_leds5x8.timer_is_set = 1;
-    timer_leds5x8.set_timer_limit  = 50; // set period for 5x8 7-segment display
+/* *****************************************************************************
+ *
+ * ************************************************************************** */
+t_ret_code keys_scan ( t_io_values *p_io )
+{
+	t_ret_code rc = RC_FAILED;
 
-    timer_leds8x8.timer_is_set = 1;
-    timer_leds8x8.set_timer_limit  = 50; // set period for timer counter
+	// Check input pointers
+	if ( p_io==NULL ) return RC_PTR_FAIL;
 
-    timer_keys.timer_is_set = 1;
-    timer_keys.ready_to_use = 1;
-    timer_keys.set_timer_limit  = 1000; // set period for 8x8 leds display
+	rc = RC_OK;
 
-    timer_fft.timer_is_set = 1;
-    timer_fft.ready_to_use = 1;
-    timer_fft.set_timer_limit  = 200; // set period for 8x8 leds display
+	if ( GPIO_PORTF_AHB_DATA_R & (1<<1) ) { p_io->keys.k5=0; } else { p_io->keys.k5=1; }
+	if ( GPIO_PORTF_AHB_DATA_R & (1<<2) ) { p_io->keys.k4=0; } else { p_io->keys.k4=1; }
+	if ( GPIO_PORTF_AHB_DATA_R & (1<<3) ) { p_io->keys.k3=0; } else { p_io->keys.k3=1; }
+	if ( GPIO_PORTG_AHB_DATA_R & (1<<0) ) { p_io->keys.k2=0; } else { p_io->keys.k2=1; }
+	if ( GPIO_PORTL_DATA_R & (1<<4)     ) { p_io->keys.k1=0; } else { p_io->keys.k1=1; }
+	if ( GPIO_PORTL_DATA_R & (1<<5)     ) { p_io->keys.k0=0; } else { p_io->keys.k0=1; }
 
-	timer_leds1on.timer_is_set = 1;
-    timer_leds1on.set_timer_limit  = 5000; // set period for led as time OFF
-    timer_leds1on.ready_to_use = 1;
-    timer_leds1on.common_rule = &leds_position;
-    timer_leds1off.timer_is_set = 1;
-    timer_leds1off.set_timer_limit  = 1000;   // set period for led as time ON
-    timer_leds1off.ready_to_use = 1;
-    timer_leds1off.common_rule = &leds_position;
+	if ( (GPIO_PORTJ_AHB_DATA_R & 0x03) == BTN_PCS_0 ) {
+		if ( p_io->in<99999 )
+		if ( p_io->in<1 ) p_io->in += 0.0001; else
+		if ( p_io->in<10 ) p_io->in += 0.001; else
+		if ( p_io->in<100 ) p_io->in += 0.01; else
+		if ( p_io->in<1000 ) p_io->in += 0.1; else
+		if ( p_io->in<10000 ) p_io->in +=  1;
 
-    timer_leds2on.timer_is_set = 1;
-    timer_leds2on.set_timer_limit  = 5000; // set period for led as time OFF
-    timer_leds2on.ready_to_use = 1;
-    timer_leds2on.common_rule = &leds_position;
-    timer_leds2off.timer_is_set = 1;
-    timer_leds2off.set_timer_limit  = 1000;   // set period for led as time ON
-    timer_leds2off.ready_to_use = 1;
-    timer_leds2off.common_rule = &leds_position;
+		if ( ++p_io->x>7 ) p_io->x=0;
+		//srand ( p_io->x *100 );
+	}
+	if ( (GPIO_PORTJ_AHB_DATA_R & 0x03) == BTN_PCS_1 ) {
+		if ( p_io->in>0 )
+		if ( p_io->in<1 ) p_io->in -= 0.0001; else
+		if ( p_io->in<10 ) p_io->in -= 0.001; else
+		if ( p_io->in<100 ) p_io->in -= 0.01; else
+		if ( p_io->in<1000 ) p_io->in -= 0.1; else
+		if ( p_io->in<10000 ) p_io->in -=  1;
 
-    timer_leds3on.timer_is_set = 1;
-    timer_leds3on.set_timer_limit  = 5000; // set period for led as time OFF
-    timer_leds3on.ready_to_use = 1;
-    timer_leds3on.common_rule = &leds_position;
-    timer_leds3off.timer_is_set = 1;
-    timer_leds3off.set_timer_limit  = 1000;   // set period for led as time ON
-    timer_leds3off.ready_to_use = 1;
-    timer_leds3off.common_rule = &leds_position;
+		if ( ++p_io->y>15 ) p_io->y=0;
+		//srand ( p_io->y *100 );
+	}
 
-    timer_leds4on.timer_is_set = 1;
-    timer_leds4on.set_timer_limit  = 5000; // set period for led as time OFF
-    timer_leds4on.ready_to_use = 1;
-    timer_leds4on.common_rule = &leds_position;
-    timer_leds4off.timer_is_set = 1;
-    timer_leds4off.set_timer_limit  = 1000;   // set period for led as time ON
-    timer_leds4off.ready_to_use = 1;
-    timer_leds4off.common_rule = &leds_position;
-
+	return rc;
 }
 //******************************************************************************
 
 
 
-//******************************************************************************
-t_timer_stat delay_timer_leds8x8 (uint8_t cfg) {
-t_timer_stat err_code = _TIMER_NOT_READY;
-	if (cfg==0) {
-		timer_leds8x8.cur_timer_val=0;
-	}
+/* *****************************************************************************
+ *
+ * ************************************************************************** */
+t_ret_code keys_analyze ( t_io_values *p_io, t_sys_values *p_sys ) {
+t_ret_code rc = RC_FAILED;
 
-	if (cfg=='?') {
-		if ( timer_leds8x8.timer_is_set ) {
-			timer_leds8x8.cur_timer_val++;
-			if ( timer_leds8x8.cur_timer_val >= timer_leds8x8.set_timer_limit ) {
-				 timer_leds8x8.cur_timer_val=0;
-				err_code = _TIMER_READY;
-			} else {
-				err_code = _TIMER_NOT_READY;
-			}
-		} else {
-			err_code = _TIMER_NOT_READY;
-		}
-	}
+	// Check input pointers
+	if ( p_io==NULL | p_sys==NULL ) return RC_PTR_FAIL;
 
-	return err_code;
+	rc = RC_OK;
+
+	p_sys->key0 =0;
+	p_sys->key1 =0;
+	p_sys->key2 =0;
+	p_sys->key3 =0;
+	p_sys->key4 =0;
+	p_sys->key5 =0;
+
+	if ( p_io->keys.k0 ) p_sys->key0 =1;
+	if ( p_io->keys.k1 ) p_sys->key1 =1;
+	if ( p_io->keys.k2 ) p_sys->key2 =1;
+	if ( p_io->keys.k3 ) p_sys->key3 =1;
+	if ( p_io->keys.k4 ) p_sys->key4 =1;
+	if ( p_io->keys.k5 ) p_sys->key5 =1;
+
+	return rc;
 }
 //******************************************************************************
 
 
 
-//******************************************************************************
-t_timer_stat delay_timer_keys (uint8_t cfg) {
-t_timer_stat err_code = _TIMER_NOT_READY;
-	if (cfg==0) {
-		timer_keys.cur_timer_val=0;
-	}
-
-	if (cfg=='?') {
-		if ( timer_keys.timer_is_set ) {
-			timer_keys.cur_timer_val++;
-			if ( timer_keys.cur_timer_val >= timer_keys.set_timer_limit ) {
-				 timer_keys.cur_timer_val=0;
-				err_code = _TIMER_READY;
-			} else {
-				err_code = _TIMER_NOT_READY;
-			}
-		} else {
-			err_code = _TIMER_NOT_READY;
-		}
-	}
-
-	return err_code;
-}
-//******************************************************************************
-
-
-
-//******************************************************************************
-t_timer_stat delay_timer_leds5x8 (uint8_t cfg) {
-t_timer_stat err_code = _TIMER_NOT_READY;
-
-	if (cfg==0) {
-		timer_leds5x8.cur_timer_val=0;
-	}
-
-	if (cfg=='?') {
-		if ( timer_leds5x8.timer_is_set ) {
-			timer_leds5x8.cur_timer_val++;
-			if ( timer_leds5x8.cur_timer_val >= timer_leds5x8.set_timer_limit ) {
-				 timer_leds5x8.cur_timer_val=0;
-				err_code = _TIMER_READY;
-			} else {
-				err_code = _TIMER_NOT_READY;
-			}
-		} else {
-			err_code = _TIMER_NOT_READY;
-		}
-	}
-
-	return err_code;
-}
-//******************************************************************************
-
-
-
-//******************************************************************************
-t_timer_stat delay_timer_fft (uint8_t cfg) {
-t_timer_stat err_code = _TIMER_NOT_READY;
-
-	if (cfg==0) {
-		timer_fft.cur_timer_val=0;
-	}
-
-	if (cfg=='?') {
-		if ( timer_fft.timer_is_set ) {
-			timer_fft.cur_timer_val++;
-			if ( timer_fft.cur_timer_val >= timer_fft.set_timer_limit ) {
-				timer_fft.cur_timer_val=0;
-				err_code = _TIMER_READY;
-			} else {
-				err_code = _TIMER_NOT_READY;
-			}
-		} else {
-			err_code = _TIMER_NOT_READY;
-		}
-	}
-
-	return err_code;
-}
-//******************************************************************************
-
-
-
-//******************************************************************************
-// Number in to string converter
-//******************************************************************************
-// itoa
+/* *****************************************************************************
+ * Number in to string converter (itoa)
+ * ************************************************************************** */
 char* IntToStr(int i, char b[]) {
     char const digit[] = "0123456789";
     char* p = b;
@@ -1237,9 +1032,9 @@ char* IntToStr(int i, char b[]) {
 
 
 
-//******************************************************************************
-// Number in to string converter
-//******************************************************************************
+/* *****************************************************************************
+ * Number in to string converter
+ * ************************************************************************** */
 // itoa
 char* FloatToLeds5x8(float ff, char b[]) {
     char const digit[] = "0123456789";
@@ -1307,7 +1102,9 @@ char* FloatToLeds5x8(float ff, char b[]) {
 
 
 
-//******************************************************************************
+/* *****************************************************************************
+ *
+ * ************************************************************************** */
 char *ultostr(unsigned long value, char *ptr, int base)
 {
   unsigned long t = 0, res = 0;
@@ -1346,8 +1143,10 @@ char *ultostr(unsigned long value, char *ptr, int base)
 
 
 
-//******************************************************************************
-char *ftostr(float value, uint8_t *p_string, int base, uint8_t *p_comma)
+/* *****************************************************************************
+ *
+ * ************************************************************************** */
+uint8_t *ftostr(float value, uint8_t *p_string, int base, uint8_t *p_comma)
 {
   unsigned long t=0;
   unsigned long res=0;
@@ -1441,237 +1240,46 @@ char *ftostr(float value, uint8_t *p_string, int base, uint8_t *p_comma)
 	  } while ( (ostatok_int=t)!=0 || dlina_ostatka!=0 );
   }
 
-  return(p_string);
+  return (p_string);
 }
 //******************************************************************************
 
 
 
-//******************************************************************************
-t_ret_code keys_scan ( t_io_values *p_io )
-{
-	t_ret_code rc = RC_FAILED;
-
-	// Check input pointers
-	if ( p_io==NULL ) return RC_PTR_FAIL;
-
-	rc = RC_OK;
-
-	if ( GPIO_PORTF_AHB_DATA_R & (1<<1) ) { p_io->keys.k5=0; } else { p_io->keys.k5=1; }
-	if ( GPIO_PORTF_AHB_DATA_R & (1<<2) ) { p_io->keys.k4=0; } else { p_io->keys.k4=1; }
-	if ( GPIO_PORTF_AHB_DATA_R & (1<<3) ) { p_io->keys.k3=0; } else { p_io->keys.k3=1; }
-	if ( GPIO_PORTG_AHB_DATA_R & (1<<0) ) { p_io->keys.k2=0; } else { p_io->keys.k2=1; }
-	if ( GPIO_PORTL_DATA_R & (1<<4)     ) { p_io->keys.k1=0; } else { p_io->keys.k1=1; }
-	if ( GPIO_PORTL_DATA_R & (1<<5)     ) { p_io->keys.k0=0; } else { p_io->keys.k0=1; }
-
-	if ( (GPIO_PORTJ_AHB_DATA_R & 0x03) == BTN_PCS_0 ) {
-		if ( p_io->in<99999 )
-		if ( p_io->in<1 ) p_io->in += 0.0001; else
-		if ( p_io->in<10 ) p_io->in += 0.001; else
-		if ( p_io->in<100 ) p_io->in += 0.01; else
-		if ( p_io->in<1000 ) p_io->in += 0.1; else
-		if ( p_io->in<10000 ) p_io->in +=  1;
-
-		if ( ++p_io->x>7 ) p_io->x=0;
-		srand ( p_io->x *100 );
-	}
-	if ( (GPIO_PORTJ_AHB_DATA_R & 0x03) == BTN_PCS_1 ) {
-		if ( p_io->in>0 )
-		if ( p_io->in<1 ) p_io->in -= 0.0001; else
-		if ( p_io->in<10 ) p_io->in -= 0.001; else
-		if ( p_io->in<100 ) p_io->in -= 0.01; else
-		if ( p_io->in<1000 ) p_io->in -= 0.1; else
-		if ( p_io->in<10000 ) p_io->in -=  1;
-
-		if ( ++p_io->y>15 ) p_io->y=0;
-		srand ( p_io->y *100 );
-	}
-
-	return rc;
-}
-//******************************************************************************
 
 
+extern int snake_main ( void ) ;
 
-//******************************************************************************
-t_ret_code keys_analyze ( t_io_values *p_io, t_sys_values *p_sys ) {
-t_ret_code rc = RC_FAILED;
-
-	// Check input pointers
-	if ( p_io==NULL | p_sys==NULL ) return RC_PTR_FAIL;
-
-	rc = RC_OK;
-
-	p_sys->key0 =0;
-	p_sys->key1 =0;
-	p_sys->key2 =0;
-	p_sys->key3 =0;
-	p_sys->key4 =0;
-	p_sys->key5 =0;
-
-	if ( p_io->keys.k0 ) p_sys->key0 =1;
-	if ( p_io->keys.k1 ) p_sys->key1 =1;
-	if ( p_io->keys.k2 ) p_sys->key2 =1;
-	if ( p_io->keys.k3 ) p_sys->key3 =1;
-	if ( p_io->keys.k4 ) p_sys->key4 =1;
-	if ( p_io->keys.k5 ) p_sys->key5 =1;
-
-	return rc;
-}
-//******************************************************************************
+extern uint32_t  u32_rtc_time;
+extern uint32_t  u32_rtc_date;
 
 
+t_io_values  io  = {0};
+t_sys_values sys = {0};
+t_io_Snake   s_snake = { .algo_step = S_INIT };
 
-//******************************************************************************
-t_ret_code algo_Snake ( t_io_values *p_io,  t_io_Snake *p_snake ) {
-/*
- * ) Set startup values (Random?)
- * )     <--------------------------------------------------------------------.
- * ) Check direction, check border limit    <-------------------------------. |
- * ) Replase last-bit into position which before head (...now it head...!)  | |
- * ) If exist Eat-bit, enlarge for length                                   | |
- * ) ...If no, do jump to ----------------------------------------------------'
- * ) random                                                                 |
- * ) if border limits is OK, direction to left/right/up/down ---------------'
- * ) ...If border is limited ->End
- * )
- */
-	t_ret_code  rc = RC_FAILED;
-
-	if ( p_io == NULL || p_snake == NULL ){
-		rc=RC_PTR_FAIL;
-		return rc;
-	}
-
-	rc = RC_OK;
-
-	//static t_algo_step  algo_step;
-	uint8_t      xx, yy;
-	uint32_t     rnd, rnd_tmp;
-
-	switch ( p_snake->algo_step )
-	{
-		case S_INIT:
-			p_snake->body = p_snake->ptr_field;
-			p_snake->ptr_field     = &a_field[0][0];
-			//p_snake->ptr_field_eat = &a_field_eat[0][0];
-			p_snake->ptr_field_eat = &buf_out;
-			p_snake->curr_x        = 0;
-			p_snake->curr_y        = 0;
-
-			// Clean field
-			for ( xx=0; xx<8; xx++ ) {
-				for ( yy=0; yy<16; yy++ ) { a_field_eat[xx][yy]=0; }
-			}
-
-			p_snake->algo_step = S_START_RANDOM;
-		break;
-
-		case S_START_RANDOM:
-			// Initiate seek random number
-			//srand ( 255 );
-			srand ( p_io->x );
-
-			// Fill field
-			//for ( xx=0; xx<8; xx++ )
-			{
-				for ( yy=0; yy<16; yy++ ) {
-					rnd = (uint8_t)rand(); // get random number
-					if (rnd&0x01) rnd&=0x69; else rnd&=0x96;
-
-					p_snake->rnd = rnd;
-					rnd_tmp = rnd;
-					//a_field_eat [xx][yy] = ( rnd_tmp < 8 ) ? 1 : 0;
-					a_field_eat_16b[yy] = rnd_tmp;
-				}
-			}
-
-			p_snake->algo_step = S_BEGIN;
-		break;
-
-		case S_BEGIN:
-			//drv_led_8x8_clear( 0, 0, 1 );
-			//for ( xx=0; xx<8; xx++ )
-			{
-				for ( yy=0; yy<16; yy/*++*/ ) {
-					if ( _TIMER_READY == delay_timer_leds8x8('?') ) {
-						//delay_timer_count(0);
-						//if (1==a_field_eat [xx][yy])
-						//io.in += 0.0001;
-						//drv_led_8x8_pixel_set(xx, yy, 0); // display info
-						drv_led_8x8_show_byte( a_field_eat_16b[yy], yy);
-						yy++;
-					}
-				}
-			}
-
-			p_snake->algo_step = S_BEGIN;
-			//p_snake->algo_step = S_MOVE;
-		break;
-
-		case S_MOVE:
-			p_snake->algo_step = S_EAT_YES;
-		break;
-
-		case S_EAT_YES:
-			p_snake->algo_step = S_EAT_NO;
-		break;
-
-		case S_EAT_NO:
-			p_snake->algo_step = S_RANDOM;
-		break;
-
-		case S_RANDOM:
-			p_snake->algo_step = S_CHANGE_DIRECTION;
-		break;
-
-		case S_CHANGE_DIRECTION:
-			p_snake->algo_step = S_BORDER_END;
-		break;
-
-		case S_BORDER_END:
-			p_snake->algo_step = S_BORDER_END;
-		break;
-
-		default :
-			p_snake->algo_step = S_BORDER_END;
-		break;
-	}
-
-	return rc;
-}
-//******************************************************************************
-
-
-
-//******************************************************************************
-// Blinks on the leds and indicator.
-//******************************************************************************
+/* *****************************************************************************
+ * Blinks on the leds and indicator.
+ * ************************************************************************** */
 int main (void) {
-    uint8_t     rc;
+    uint8_t     rc=1;
+    uint8_t     comma;
+    uint8_t    *p_str=0;
+
     volatile uint32_t  pos;
     volatile uint32_t  cnt=0;
-	char        *p_str=0;
-    uint8_t      comma;
-	t_io_values  io  = {0};
-	t_sys_values sys = {0};
-	t_io_Snake   snake = { .algo_step = S_INIT };
 
     drv_sys_init_gpio_output_input ();
     drv_usr_init_led_7segments ();
     drv_usr_init_led_8x8 ();
+    drv_usr_init_rtc ();
     drv_usr_init_scheduler_and_all_timers ();
 
     leds_position = 1;
     io.in = 0.0001; // Set to default value
 
-	while(1)  // Loop forever.
-	{
-		drv_led_blink (); // timer_leds4on.common_rule
-
-		//if ( _TIMER_READY == delay_timer_count('?') ) {
-		//	//io.in += 0.0001;
-		//}
+	while(1) { // Loop forever.
+	//	drv_led_blink (); // timer_leds4on.common_rule
 
 		//if (sys.key_pressed==0)
 		//	drv_led_7segments_clean();
@@ -1701,13 +1309,18 @@ int main (void) {
 				if (sys.key2) { if ( io.in > 0 )     io.in -= 0.01; }
 				if (sys.key1) { if ( io.in < 99999 ) io.in += 0.1; }
 				if (sys.key0) { if ( io.in > 0 )     io.in -= 0.1; }
+				//srand ( (char)io.in ); // Initiate seek random number
+				//s_snake.rnd = rnd_fill_field( (io.in)*100 );
 			} else {
 				sys.key_pressed=0;
 			}
 		}
 
-		if ( _TIMER_READY == delay_timer_fft('?') ) {
-			if ( RC_OK != algo_Snake (&io, &snake) ) { error_forever_loop; }
+		if ( _TIMER_READY == delay_timer_leds8x8('?') ) {
+			//int rc;
+			//rc = snake_main();
+
+			if ( RC_OK != algo_Snake (&io, &s_snake) ) { error_forever_loop; }
 
 			/*char  yy=0;
 			float val=0;
@@ -1716,12 +1329,26 @@ int main (void) {
 				//val = abs(buf_out[yy]*10);
 				if ( buf_out[yy] <0 ) {  val = -1*(buf_out[yy] * 10000);
 				} else {                 val =    (buf_out[yy] * 10000); }
-				drv_led_8x8_show_byte( (uint8_t)val, yy );
+				drv_led_8x8_show_byte( (uint8_t)val, xx, yy );
 				yy++;
 			} else {
 				yy=0;
 			}*/
 		}
+
+		/*
+		if ( _TIMER_READY == delay_timer_random_generator('?') ) {
+			if ( ++io.rnd>7 ) io.rnd=0;
+
+			//Read RTC Time
+			u32_rtc_time = HIB_CAL0_R;
+
+			//Read RTC Date
+			u32_rtc_date = HIB_CAL1_R;
+		}
+		*/
+
 	}
+	return rc;
 }
 //******************************************************************************

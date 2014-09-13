@@ -46,7 +46,8 @@ MEMORY
     /* Application stored in and executes from internal flash */
     FLASH (RX) : origin = APP_BASE, length = 0x00100000
     /* Application uses internal RAM for data */
-    SRAM (RWX) : origin = 0x20000000, length = 0x00040000
+    //SRAM (RWX) : origin = 0x20000000, length = 0x00040000
+    SRAM (RWX) : origin = RAM_BASE, length = 0x00040000
 }
 
 /* Section allocation in memory */
@@ -67,4 +68,5 @@ SECTIONS
     .stack  :   > SRAM
 }
 
-__STACK_TOP = __stack + 256;
+//__STACK_TOP = __stack + 256;
+__STACK_TOP = __stack + 512;

@@ -3,8 +3,11 @@
 * Visit www.nr.com for the licence.             *
 ************************************************/
 
-// The following line must be defined before including math.h to correctly define M_PI
+/* *****************************************************************************
+ * The following line must be defined before including math.h to correctly define M_PI
+ * ************************************************************************** */
 #define _USE_MATH_DEFINES
+
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -14,17 +17,24 @@
 #include "inc/tm4c1294ncpdt.h"
 
 
+/* *****************************************************************************
+ *
+ * ************************************************************************** */
 #define M_PI   (3.1415926)
 #define PI     M_PI   /* pi to machine precision, defined in math.h */
 #define TWOPI  (2.0*PI)
 
 
+/* *****************************************************************************
+ *
+ * ************************************************************************** */
 void fft_four1 ( double data[], int nn, int isign );
 int  fft_calc  ( void );
 
 
-/* FFT/IFFT routine. (see pages 507-508 of Numerical Recipes in C)
-Inputs:
+/* *****************************************************************************
+  FFT/IFFT routine. (see pages 507-508 of Numerical Recipes in C)
+  Inputs:
    data[] : array of complex* data points of size 2*NFFT+1.
       data[0] is unused,
       * the n'th complex number x(n), for 0 <= n <= length (x)-1, is stored as:
@@ -38,9 +48,9 @@ Inputs:
          if set to -1,
             computes Inverse FFT - in this case the output values have
             to be manually normalized by multiplying with 1/NFFT.
-Outputs:
-   data[] : The FFT or IFFT results are stored in data, overwriting the input.*/
-
+  Outputs:
+   data[] : The FFT or IFFT results are stored in data, overwriting the input.
+ * ************************************************************************** */
 void fft_four1(double data[], int nn, int isign) {
 	int n, mmax, m, j, istep, i;
 	double wtemp, wr, wpr, wpi, wi, theta;
@@ -89,6 +99,9 @@ void fft_four1(double data[], int nn, int isign) {
 
 #define  FFT_NUM  (32)
 
+/* *****************************************************************************
+ *
+ * ************************************************************************** */
 // FOR TEST - SINUS-PERIOD + NOISE_EMULATION
 double  buf_in[FFT_NUM] // 360/32 = 11.25" (step)
 	= { 0, 		0.195,	0.382,	0.555,	0.707,	0.831,	0.923,	0.980,
@@ -99,11 +112,12 @@ double  buf_in[FFT_NUM] // 360/32 = 11.25" (step)
 double  buf_out[2*FFT_NUM];
 
 
-/********************************************************
-* The following is a test routine that generates a ramp *
-* with 10 elements, finds their FFT, and then finds the *
-* original sequence using inverse FFT                   *
-********************************************************/
+
+/* *****************************************************************************
+* The following is a test routine that generates a ramp
+* with 10 elements, finds their FFT, and then finds the
+* original sequence using inverse FFT
+ * ************************************************************************** */
 //int fft_main(int argc, char * argv[])
 int fft_calc ( void )
 {
@@ -180,7 +194,6 @@ int fft_calc ( void )
    }*/
    //-------------------------------------------------------------------------
 
-   
    
    /* calculate IFFT */
    fft_four1(buf_out, NFFT, -1);
