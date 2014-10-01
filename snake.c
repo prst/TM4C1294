@@ -1,4 +1,5 @@
-//#include "TM4C1294_edu.h"
+
+#include "TM4C1294_leds.h"
 #include "snake.h"
 
 /*
@@ -16,9 +17,6 @@ void snake_game_over ( void ) {
 	//exit(0);
 }
 
-
-#include "TM4C1294_edu.h"
-
 extern t_sys_values sys;
 
 
@@ -30,7 +28,7 @@ void snake_move (snake_node * player) {
 	if (player==NULL) return;
 
     static int tempx=0, tempy=0;
-    char one_shot=0;
+    //char one_shot=0;
 
     //this contains the array of flags which tell which button has been pressed.
 	//It must be cleared before every input.

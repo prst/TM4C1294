@@ -5,19 +5,21 @@
 //*****************************************************************************
 //*****************************************************************************
 
-#include "TM4C1294_edu.h"
+#include "TM4C1294_leds.h"
 #include "time_delays.h"
+#include "ps2_mouse.h"
 
 //#include "inc/hw_types.h"
 //#include "drivers/pinout.h"
 //#include "driverlib/rom.h"
 //#include "driverlib/rom_map.h"
 
+//#define  __TI_COMPILER_VERSION__
 
 /* *****************************************************************************
  * Global and system variables
  * ************************************************************************** */
-t_Scheduler timer_leds5x8;
+/*t_Scheduler timer_leds5x8;
 t_Scheduler timer_leds1on, timer_leds1off;
 t_Scheduler timer_leds2on, timer_leds2off;
 t_Scheduler timer_leds3on, timer_leds3off;
@@ -26,6 +28,9 @@ t_Scheduler timer_leds8x8;
 t_Scheduler timer_keys;
 t_Scheduler timer_fft;
 t_Scheduler timer_rnd;
+t_Scheduler timer_mouse;*/
+
+t_Scheduler  timer [ /*sizeof(timer_name)*/ 15 ];
 
 uint32_t  dly1 = 0;
 uint32_t  dly2 = 0;
@@ -37,9 +42,8 @@ uint8_t   a_field [8][16];
 uint8_t   a_field_eat [8][16];
 uint8_t   a_field_eat_16b [16];
 
-uint8_t   data [5] = { 1,  3,  5,  7,  9 };
-uint8_t   datas[5] = {'1','3','5','7','9'};
-
+uint8_t   data [5] = { 1,   3,   5,   7,   9 };
+uint8_t   datas[5] = {'1', '3', '5', '7', '9'};
 
 
 /* *****************************************************************************
@@ -169,6 +173,12 @@ Offset 	Name Type 	Reset 					Description page
     GPIO_PORTF_AHB_DIR_R |= 0x01;
     GPIO_PORTF_AHB_DEN_R |= 0x01;
 
+    // Enable the GPIO pin for the LED (PP0).  Set the direction as output, and
+    // enable the GPIO pin for digital function.
+    GPIO_PORTP_DIR_R |= (1<<0|1<<1);
+    GPIO_PORTP_DEN_R |= (1<<0|1<<1);
+
+
     //--------------------------------------------------------------------------
     // INPUT
     //--------------------------------------------------------------------------
@@ -188,19 +198,20 @@ Offset 	Name Type 	Reset 					Description page
     GPIO_PORTF_AHB_PP_R   = 1;
     GPIO_PORTF_AHB_PC_R   = 3;
 
-    // Inputs on Port F
+    // Inputs on Port G
     GPIO_PORTG_AHB_DIR_R &=~(1<<0);
     GPIO_PORTG_AHB_DEN_R |= (1<<0); //
     GPIO_PORTG_AHB_PUR_R |= (1<<0); // Pull-Up Resistor
     GPIO_PORTG_AHB_PP_R   = 1;
     GPIO_PORTG_AHB_PC_R   = 3;
 
-    // Inputs on Port F
+    // Inputs on Port L
     GPIO_PORTL_DIR_R &=~(1<<5|1<<4);
     GPIO_PORTL_DEN_R |= (1<<5|1<<4); //
     GPIO_PORTL_PUR_R |= (1<<5|1<<4); // Pull-Up Resistor
     GPIO_PORTL_PP_R   = 1;
     GPIO_PORTL_PC_R   = 3;
+
 
     // ========================================================================
     // PC[3:0], PD7, PE7 - are loacked by default, so read datasheet, page 743;
@@ -840,80 +851,80 @@ void drv_led_8x8_show_byte ( uint8_t val, uint8_t xx, uint8_t yy ) {
 int drv_led_blink (void) {
     volatile uint32_t ui32Loop;
     //.........................................................................
-    if (*timer_leds4on.common_rule==1){
-        if (timer_leds1on.ready_to_use) {
-        	timer_leds1off.ready_to_use=0;
-            if ((timer_leds1on.timer_is_set) && (++timer_leds1on.cur_timer_val==timer_leds1on.set_timer_limit)) {
-        		timer_leds1on.cur_timer_val=0;
-            	timer_leds1off.ready_to_use=1;
+    if (*timer[leds4on].common_rule==1){
+        if (timer[leds1on].ready_to_use) {
+        	timer[leds1off].ready_to_use=0;
+            if ((timer[leds1on].timer_is_set) && (++timer[leds1on].cur_timer_val==timer[leds1on].set_timer_limit)) {
+        		timer[leds1on].cur_timer_val=0;
+            	timer[leds1off].ready_to_use=1;
         		GPIO_PORTN_DATA_R |= 0x02;    // Turn on the LED.
         	}
         }
-        if (timer_leds1off.ready_to_use) {
-        	timer_leds1on.ready_to_use=0;
-        	if ((timer_leds1off.timer_is_set) && (++timer_leds1off.cur_timer_val==timer_leds1off.set_timer_limit)) {
-    			timer_leds1off.cur_timer_val=0;
-    			timer_leds1on.ready_to_use=1;
+        if (timer[leds1off].ready_to_use) {
+        	timer[leds1on].ready_to_use=0;
+        	if ((timer[leds1off].timer_is_set) && (++timer[leds1off].cur_timer_val==timer[leds1off].set_timer_limit)) {
+    			timer[leds1off].cur_timer_val=0;
+    			timer[leds1on].ready_to_use=1;
     			GPIO_PORTN_DATA_R &= ~(0x02);    // Turn off the LED.
     			leds_position=2;
         	}
     	}
     }
     //.........................................................................
-    if (*timer_leds1on.common_rule==2){
-        if (timer_leds2on.ready_to_use) {
-        	timer_leds2off.ready_to_use=0;
-            if ((timer_leds2on.timer_is_set) && (++timer_leds2on.cur_timer_val==timer_leds2on.set_timer_limit)) {
-        		timer_leds2on.cur_timer_val=0;
-            	timer_leds2off.ready_to_use=1;
+    if (*timer[leds1on].common_rule==2){
+        if (timer[leds2on].ready_to_use) {
+        	timer[leds2off].ready_to_use=0;
+            if ((timer[leds2on].timer_is_set) && (++timer[leds2on].cur_timer_val==timer[leds2on].set_timer_limit)) {
+        		timer[leds2on].cur_timer_val=0;
+            	timer[leds2off].ready_to_use=1;
         		GPIO_PORTN_DATA_R |= 0x01;    // Turn on the LED.
         	}
         }
-        if (timer_leds2off.ready_to_use) {
-        	timer_leds2on.ready_to_use=0;
-        	if ((timer_leds2off.timer_is_set) && (++timer_leds2off.cur_timer_val==timer_leds2off.set_timer_limit)) {
-    			timer_leds2off.cur_timer_val=0;
-    			timer_leds2on.ready_to_use=1;
+        if (timer[leds2off].ready_to_use) {
+        	timer[leds2on].ready_to_use=0;
+        	if ((timer[leds2off].timer_is_set) && (++timer[leds2off].cur_timer_val==timer[leds2off].set_timer_limit)) {
+    			timer[leds2off].cur_timer_val=0;
+    			timer[leds2on].ready_to_use=1;
     			GPIO_PORTN_DATA_R &= ~(0x01);    // Turn off the LED.
     			leds_position=3;
         	}
     	}
     }
     //.........................................................................
-    if (*timer_leds2on.common_rule==3){
-        if (timer_leds3on.ready_to_use) {
-        	timer_leds3off.ready_to_use=0;
-            if ((timer_leds3on.timer_is_set) && (++timer_leds3on.cur_timer_val==timer_leds3on.set_timer_limit)) {
-        		timer_leds3on.cur_timer_val=0;
-            	timer_leds3off.ready_to_use=1;
+    if (*timer[leds2on].common_rule==3){
+        if (timer[leds3on].ready_to_use) {
+        	timer[leds3off].ready_to_use=0;
+            if ((timer[leds3on].timer_is_set) && (++timer[leds3on].cur_timer_val==timer[leds3on].set_timer_limit)) {
+        		timer[leds3on].cur_timer_val=0;
+            	timer[leds3off].ready_to_use=1;
             	GPIO_PORTF_AHB_DATA_R |= 0x10;    // Turn on the LED.
         	}
         }
-        if (timer_leds3off.ready_to_use) {
-        	timer_leds3on.ready_to_use=0;
-        	if ((timer_leds3off.timer_is_set) && (++timer_leds3off.cur_timer_val==timer_leds3off.set_timer_limit)) {
-    			timer_leds3off.cur_timer_val=0;
-    			timer_leds3on.ready_to_use=1;
+        if (timer[leds3off].ready_to_use) {
+        	timer[leds3on].ready_to_use=0;
+        	if ((timer[leds3off].timer_is_set) && (++timer[leds3off].cur_timer_val==timer[leds3off].set_timer_limit)) {
+    			timer[leds3off].cur_timer_val=0;
+    			timer[leds3on].ready_to_use=1;
     			GPIO_PORTF_AHB_DATA_R &= ~(0x10);    // Turn off the LED.
     			leds_position=4;
         	}
     	}
     }
     //.........................................................................
-    if (*timer_leds3on.common_rule==4){
-        if (timer_leds4on.ready_to_use) {
-        	timer_leds4off.ready_to_use=0;
-            if ((timer_leds4on.timer_is_set) && (++timer_leds4on.cur_timer_val==timer_leds4on.set_timer_limit)) {
-        		timer_leds4on.cur_timer_val=0;
-            	timer_leds4off.ready_to_use=1;
+    if (*timer[leds3on].common_rule==4){
+        if (timer[leds4on].ready_to_use) {
+        	timer[leds4off].ready_to_use=0;
+            if ((timer[leds4on].timer_is_set) && (++timer[leds4on].cur_timer_val==timer[leds4on].set_timer_limit)) {
+        		timer[leds4on].cur_timer_val=0;
+            	timer[leds4off].ready_to_use=1;
             	GPIO_PORTF_AHB_DATA_R |= 0x01;    // Turn on the LED.
         	}
         }
-        if (timer_leds4off.ready_to_use) {
-        	timer_leds4on.ready_to_use=0;
-        	if ((timer_leds4off.timer_is_set) && (++timer_leds4off.cur_timer_val==timer_leds4off.set_timer_limit)) {
-    			timer_leds4off.cur_timer_val=0;
-    			timer_leds4on.ready_to_use=1;
+        if (timer[leds4off].ready_to_use) {
+        	timer[leds4on].ready_to_use=0;
+        	if ((timer[leds4off].timer_is_set) && (++timer[leds4off].cur_timer_val==timer[leds4off].set_timer_limit)) {
+    			timer[leds4off].cur_timer_val=0;
+    			timer[leds4on].ready_to_use=1;
     			GPIO_PORTF_AHB_DATA_R &= ~(0x01);    // Turn off the LED.
     			leds_position=1;
         	}
@@ -1246,45 +1257,260 @@ uint8_t *ftostr(float value, uint8_t *p_string, int base, uint8_t *p_comma)
 
 
 
+//volatile unsigned long delay;
+
+//******************************************************************************
+// configure the system to get its clock from the PLL
+//******************************************************************************
+void drv_sys_init_pll (void) {
+	uint32_t timeout;
+
+	// 1) Once POR has completed, the PIOSC is acting as the system clock.  Just in case
+	//  this function has been called previously, be sure that the system is not being
+	//  clocked from the PLL while the PLL is being reconfigured.
+	SYSCTL_RSCLKCFG_R &= ~SYSCTL_RSCLKCFG_USEPLL;
+
+	// 2) Power up the MOSC by clearing the NOXTAL bit in the SYSCTL_MOSCCTL_R register.
+
+	// 3) Since crystal mode is required, clear the PWRDN bit.  The datasheet says to do
+	//  these two operations in a single write access to SYSCTL_MOSCCTL_R.
+	SYSCTL_MOSCCTL_R &= ~( SYSCTL_MOSCCTL_NOXTAL | SYSCTL_MOSCCTL_PWRDN );
+	//  Wait for the MOSCPUPRIS bit to be set in the SYSCTL_RIS_R register, indicating
+	//  that MOSC crystal mode is ready.
+	while ( ( SYSCTL_RIS_R & SYSCTL_RIS_MOSCPUPRIS )==0 ) { };
+
+	// 4) Set both the OSCSRC and PLLSRC fields to 0x3 in the
+	//  SYSCTL_RSCLKCFG_R register at offset 0x0B0.
+	//  Temporarily get run/sleep clock from 25 MHz main oscillator.
+	SYSCTL_RSCLKCFG_R =
+			( SYSCTL_RSCLKCFG_R & ~SYSCTL_RSCLKCFG_OSCSRC_M) + SYSCTL_RSCLKCFG_OSCSRC_MOSC;
+	//  PLL clock from main oscillator.
+	SYSCTL_RSCLKCFG_R =
+			( SYSCTL_RSCLKCFG_R & ~SYSCTL_RSCLKCFG_PLLSRC_M ) + SYSCTL_RSCLKCFG_PLLSRC_MOSC;
+
+	// 5) If the application also requires the MOSC to be the deep-sleep clock source,
+	//  then program the DSOSCSRC field in the SYSCTL_DSCLKCFG_R register to 0x3.
+	//  Get deep-sleep clock from main oscillator (few examples use deep-sleep; optional).
+	SYSCTL_DSCLKCFG_R =
+			( SYSCTL_DSCLKCFG_R & ~SYSCTL_DSCLKCFG_DSOSCSRC_M ) + SYSCTL_DSCLKCFG_DSOSCSRC_MOSC;
+
+	// 6) Write the SYSCTL_PLLFREQ0_R and SYSCTL_PLLFREQ1_R registers with the values of
+	//  Q, N, MINT, and MFRAC to configure the desired VCO frequency setting.
+	// ************
+	//  The datasheet implies that the VCO frequency can go as high as 25.575 GHz
+	//  with MINT=1023 and a 25 MHz crystal.  This is clearly unreasonable.  For lack
+	//  of a recommended VCO frequency, this program sets Q, N, and MINT for a VCO
+	//  frequency of 480 MHz with MFRAC=0 to reduce jitter.  To run at a frequency
+	//  that is not an integer divisor of 480 MHz, change this section.
+	//  fVC0 = (fXTAL/(Q + 1)/(N + 1))*(MINT + (MFRAC/1,024))
+	//  fVCO = 480,000,000 Hz (arbitrary, but presumably as small as needed)
+	#define FXTAL 25000000  // fixed, this crystal is soldered to the Connected Launchpad
+	#define Q            0
+	#define N            4  // chosen for reference frequency within 4 to 30 MHz
+	#define MINT        96  // 480,000,000 = (25,000,000/(0 + 1)/(4 + 1))*(96 + (0/1,024))
+	#define MFRAC        0  // zero to reduce jitter
+	//  SysClk = fVCO / (PSYSDIV + 1)
+	#define SYSCLK (FXTAL/(Q+1)/(N+1))*(MINT+MFRAC/1024)/(PSYSDIV+1)
+	SYSCTL_PLLFREQ0_R =
+			(SYSCTL_PLLFREQ0_R&~SYSCTL_PLLFREQ0_MFRAC_M)+(MFRAC<<SYSCTL_PLLFREQ0_MFRAC_S) |
+			(SYSCTL_PLLFREQ0_R&~SYSCTL_PLLFREQ0_MINT_M)+(MINT<<SYSCTL_PLLFREQ0_MINT_S);
+	SYSCTL_PLLFREQ1_R =
+			(SYSCTL_PLLFREQ1_R&~SYSCTL_PLLFREQ1_Q_M)+(Q<<SYSCTL_PLLFREQ1_Q_S) |
+			(SYSCTL_PLLFREQ1_R&~SYSCTL_PLLFREQ1_N_M)+(N<<SYSCTL_PLLFREQ1_N_S);
+	SYSCTL_PLLFREQ0_R |= SYSCTL_PLLFREQ0_PLLPWR;   // turn on power to PLL
+	SYSCTL_RSCLKCFG_R |= SYSCTL_RSCLKCFG_NEWFREQ;  // lock in register changes
+
+	// 7) Write the SYSCTL_MEMTIM0_R register to correspond to the new clock setting.
+	//    ************
+	//    Set the timing parameters to the main Flash and EEPROM memories, which
+	//    depend on the system clock frequency.  See Table 5-12 in datasheet.
+	if(SYSCLK < 16000000) {
+		// FBCHT/EBCHT = 0, FBCE/EBCE = 0, FWS/EWS = 0
+		SYSCTL_MEMTIM0_R =
+				(SYSCTL_MEMTIM0_R & ~0x03EF03EF) +
+				(0x0<<22) + (0x0<<21) + (0x0<<16) + (0x0<<6) + (0x0<<5) + (0x0);
+	} else if (SYSCLK == 16000000) {
+		// FBCHT/EBCHT = 0, FBCE/EBCE = 1, FWS/EWS = 0
+		SYSCTL_MEMTIM0_R =
+				(SYSCTL_MEMTIM0_R & ~0x03EF03EF) +
+				(0x0<<22) + (0x1<<21) + (0x0<<16) + (0x0<<6) + (0x1<<5) + (0x0);
+	} else if (SYSCLK <= 40000000) {
+		// FBCHT/EBCHT = 2, FBCE/EBCE = 0, FWS/EWS = 1
+		SYSCTL_MEMTIM0_R =
+				(SYSCTL_MEMTIM0_R & ~0x03EF03EF) +
+				(0x2<<22) + (0x0<<21) + (0x1<<16) + (0x2<<6) + (0x0<<5) + (0x1);
+	} else if (SYSCLK <= 60000000) {
+		// FBCHT/EBCHT = 3, FBCE/EBCE = 0, FWS/EWS = 2
+		SYSCTL_MEMTIM0_R =
+				(SYSCTL_MEMTIM0_R & ~0x03EF03EF) +
+				(0x3<<22) + (0x0<<21) + (0x2<<16) + (0x3<<6) + (0x0<<5) + (0x2);
+	} else if (SYSCLK <= 80000000) {
+		// FBCHT/EBCHT = 4, FBCE/EBCE = 0, FWS/EWS = 3
+		SYSCTL_MEMTIM0_R =
+				(SYSCTL_MEMTIM0_R & ~0x03EF03EF) +
+				(0x4<<22) + (0x0<<21) + (0x3<<16) + (0x4<<6) + (0x0<<5) + (0x3);
+	} else if (SYSCLK <= 100000000) {
+		// FBCHT/EBCHT = 5, FBCE/EBCE = 0, FWS/EWS = 4
+		SYSCTL_MEMTIM0_R =
+				(SYSCTL_MEMTIM0_R & ~0x03EF03EF) +
+				(0x5<<22) + (0x0<<21) + (0x4<<16) + (0x5<<6) + (0x0<<5) + (0x4);
+	} else if (SYSCLK <= 120000000) {
+		// FBCHT/EBCHT = 6, FBCE/EBCE = 0, FWS/EWS = 5
+		SYSCTL_MEMTIM0_R =
+				(SYSCTL_MEMTIM0_R & ~0x03EF03EF) +
+				(0x6<<22) + (0x0<<21) + (0x5<<16) + (0x6<<6) + (0x0<<5) + (0x5);
+	} else {
+		// A setting is invalid, and the PLL cannot clock the system faster than 120 MHz.
+		// Skip the rest of the initialization, leaving the system clocked from the MOSC,
+		// which is a 25 MHz crystal.
+		return;
+	}
+
+	// 8) Wait for the SYSCTL_PLLSTAT_R register to indicate that the PLL has reached
+	//    lock at the new operating point (or that a timeout period has passed and lock
+	//    has failed, in which case an error condition exists and this sequence is
+	//    abandoned and error processing is initiated).
+	timeout = 0;
+	while ( ((SYSCTL_PLLSTAT_R & SYSCTL_PLLSTAT_LOCK ) == 0) && (timeout < 0xFFFF)) {
+		timeout = timeout + 1;
+	}
+
+	if (timeout == 0xFFFF) {
+		// The PLL never locked or is not powered.
+		// Skip the rest of the initialization, leaving the system clocked from the MOSC,
+		// which is a 25 MHz crystal.
+		return;
+	}
+
+	// 9)Write the SYSCTL_RSCLKCFG_R register's PSYSDIV value, set the USEPLL bit to
+	//   enabled, and set the MEMTIMU bit.
+	SYSCTL_RSCLKCFG_R =
+		(SYSCTL_RSCLKCFG_R & ~SYSCTL_RSCLKCFG_PSYSDIV_M) + (PSYSDIV & SYSCTL_RSCLKCFG_PSYSDIV_M) |
+		SYSCTL_RSCLKCFG_MEMTIMU |
+		SYSCTL_RSCLKCFG_USEPLL;
+}
+//******************************************************************************
 
 
+
+//******************************************************************************
+//debug code
+//******************************************************************************
+// delay function for testing from sysctl.c
+// which delays 3*ulCount cycles
+// ... Delay(16666667); // delay ~1 sec @ 50 MHz
+// ... Delay(2000000);  // delay ~0.05 sec @ 120 MHz (0.375 sec @ 16 MHz; 0.078125 sec @ 76.8 MHz)
+#ifdef __TI_COMPILER_VERSION__
+	void Delay (uint32_t ulCount) {        // @ Code Composer Studio Code
+		__asm (
+		  " subs    r0, #1 \n "
+		  " bne     Delay \n "
+		  " bx      lr \n "  );
+		//while (ulCount-->0) {};
+	}
+#else
+	__asm void Delay (uint32_t ulCount) {  // @ Keil uVision Code
+		subs    r0, #1
+		bne     Delay
+		bx      lr    }
+#endif // #ifdef __TI_COMPILER_VERSION__
+//******************************************************************************
+
+
+
+//******************************************************************************
+//#define NVIC_ST_CTRL_R          (*((volatile unsigned long *)0xE000E010))
+//#define NVIC_ST_RELOAD_R        (*((volatile unsigned long *)0xE000E014))
+//#define NVIC_ST_CURRENT_R       (*((volatile unsigned long *)0xE000E018))
+#define NVIC_ST_CTRL_COUNT      0x00010000  // Count flag
+#define NVIC_ST_CTRL_CLK_SRC    0x00000004  // Clock Source
+#define NVIC_ST_CTRL_INTEN      0x00000002  // Interrupt enable
+#define NVIC_ST_CTRL_ENABLE     0x00000001  // Counter mode
+#define NVIC_ST_RELOAD_M        0x00FFFFFF  // Counter load value
+//******************************************************************************
+// Initialize SysTick with busy wait running at bus clock.
+//******************************************************************************
+void drv_sys_init_SysTick ( void ) {
+  NVIC_ST_CTRL_R    = 0;                    // disable SysTick during setup
+  NVIC_ST_RELOAD_R  = NVIC_ST_RELOAD_M;     // maximum reload value
+  NVIC_ST_CURRENT_R = 0;                    // any write to current clears it
+										    // enable SysTick with core clock
+  NVIC_ST_CTRL_R    = NVIC_ST_CTRL_ENABLE + NVIC_ST_CTRL_CLK_SRC;
+}
+//******************************************************************************
+
+
+
+//******************************************************************************
+// Time delay using busy wait.
+// The delay parameter is in units of the 6 MHz core clock. (167 nsec)
+//******************************************************************************
+void SysTick_Wait ( unsigned long delay ) {
+  volatile unsigned long  elapsedTime;
+  unsigned long           startTime = NVIC_ST_CURRENT_R;
+  do {
+    elapsedTime = ( startTime-NVIC_ST_CURRENT_R ) & 0x00FFFFFF;
+  }
+  while ( elapsedTime <= delay );
+}
+//******************************************************************************
+
+
+
+//******************************************************************************
+// Time delay using busy wait.
+// 10000us equals 10ms
+//******************************************************************************
+void SysTick_Wait_10ms ( unsigned long delay ) {
+  unsigned long  i;
+  for ( i=0; i<delay; i++ ) {
+    SysTick_Wait ( 60000 );  // wait 10ms (assumes 6 MHz clock)
+  }
+}
+//******************************************************************************
+
+
+
+//******************************************************************************
 extern int snake_main ( void ) ;
 
 extern uint32_t  u32_rtc_time;
 extern uint32_t  u32_rtc_date;
+t_io_values      io  = {0};
+t_sys_values     sys = {0};
+t_io_Snake       s_snake = { .algo_step = S_INIT };
 
-
-t_io_values  io  = {0};
-t_sys_values sys = {0};
-t_io_Snake   s_snake = { .algo_step = S_INIT };
 
 /* *****************************************************************************
  * Blinks on the leds and indicator.
  * ************************************************************************** */
 int main (void) {
-    uint8_t     rc=1;
-    uint8_t     comma;
-    uint8_t    *p_str=0;
+              //uint8_t    rc=1;
+              uint8_t    comma;
+              uint8_t   *p_str=0;
+    volatile  uint32_t   pos;
+    volatile  uint32_t   cnt=0;
 
-    volatile uint32_t  pos;
-    volatile uint32_t  cnt=0;
+    //SysCtlClockSet(SYSCTL_SYSDIV_10 | SYSCTL_USE_PLL | SYSCTL_OSC_MAIN | SYSCTL_XTAL_16MHZ);
 
+    drv_sys_init_SysTick ();
+    drv_sys_init_pll ();
     drv_sys_init_gpio_output_input ();
     drv_usr_init_led_7segments ();
     drv_usr_init_led_8x8 ();
     drv_usr_init_rtc ();
-    drv_usr_init_scheduler_and_all_timers ();
+    drv_usr_init_scheduler_end_timers ();
 
     leds_position = 1;
     io.in = 0.0001; // Set to default value
 
-	while(1) { // Loop forever.
+	while (1) { // Loop forever.
 	//	drv_led_blink (); // timer_leds4on.common_rule
 
 		//if (sys.key_pressed==0)
 		//	drv_led_7segments_clean();
 		//else
-		if ( _TIMER_READY == delay_timer_leds5x8('?') ) {
+		if ( _TIMER_READY == delay_timer ( leds5x8, '?' ) ) {
 			if ( pos < 5 ) {
 				p_str = ftostr ( io.in, data, 10, &comma ); // value, *ptr, base, *comma
 				if (p_str!=NULL) {
@@ -1294,11 +1520,10 @@ int main (void) {
 				}
 				pos++;
 				cnt++;
-    		}
-			if (pos>=5) pos=0;
+    		} else pos=0;
     	}
 
-		if ( _TIMER_READY == delay_timer_keys ('?') ) {
+		if ( _TIMER_READY == delay_timer ( keys, '?' ) ) {
 			keys_scan ( &io );
 			keys_analyze ( &io, &sys );
 			if ( sys.key0 ||sys.key1 ||sys.key2 ||sys.key3 ||sys.key4 ||sys.key5 ) {
@@ -1316,13 +1541,13 @@ int main (void) {
 			}
 		}
 
-		if ( _TIMER_READY == delay_timer_leds8x8('?') ) {
-			//int rc;
+		if ( _TIMER_READY == delay_timer( leds8x8, '?' ) ) {
+			//int  rc;
 			//rc = snake_main();
 
 			if ( RC_OK != algo_Snake (&io, &s_snake) ) { error_forever_loop; }
 
-			/*char  yy=0;
+			/*  char  yy=0;
 			float val=0;
 			rc = fft_calc();
 			if ( yy<16 ) {
@@ -1333,22 +1558,22 @@ int main (void) {
 				yy++;
 			} else {
 				yy=0;
-			}*/
+			}  */
 		}
 
-		/*
-		if ( _TIMER_READY == delay_timer_random_generator('?') ) {
+		/*  if ( _TIMER_READY == delay_timer ( rnd, '?' ) ) {
 			if ( ++io.rnd>7 ) io.rnd=0;
 
-			//Read RTC Time
-			u32_rtc_time = HIB_CAL0_R;
+			u32_rtc_time = HIB_CAL0_R;  //Read RTC Time
+			u32_rtc_date = HIB_CAL1_R;  //Read RTC Date
+		}  */
 
-			//Read RTC Date
-			u32_rtc_date = HIB_CAL1_R;
+		if ( _TIMER_READY == delay_timer ( mouse, '?' ) ) {
+			//mouse_main();
+    		GPIO_PORTN_DATA_R ^= 0x02;    // Toogle on the LED.
 		}
-		*/
-
 	}
-	return rc;
+
+	//return rc;
 }
 //******************************************************************************

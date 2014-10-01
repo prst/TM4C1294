@@ -4,7 +4,7 @@
 
 #include <stdlib.h>
 
-#include "TM4C1294_edu.h"
+#include "TM4C1294_leds.h"
 
 #include "snake.h"
 
@@ -74,8 +74,8 @@ t_ret_code algo_Snake ( t_io_values *p_io,  t_io_Snake *p_snake ) {
 	t_ret_code  rc = RC_FAILED;
 	//static t_algo_step  algo_step;
 	uint8_t      xx, yy;
-	uint32_t     rnd, rnd_tmp;
-	static char  snake_init = 0;
+	//uint32_t     rnd, rnd_tmp;
+	//static char  snake_init = 0;
 	static snake_node  player = {0};
 	//snake_node* player = malloc(sizeof(snake_node));
 
@@ -153,7 +153,7 @@ t_ret_code algo_Snake ( t_io_values *p_io,  t_io_Snake *p_snake ) {
 	        //higher the number the longer we wait. So higher gamespeed means a lower wait.
 	        //rest_callback(100-gamespeed * 30, rest1);
 
-			char val;
+			//char val;
 			static char prev_x, prev_y;
 
 			//drv_led_8x8_clear( 0, 0, 1 );

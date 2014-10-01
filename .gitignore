@@ -4,3 +4,4 @@ tmp/*
 *.exe
 *.pdf
 
+/Debug
